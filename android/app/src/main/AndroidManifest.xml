@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- The renderer needs OpenGL ES 3.0. -->
+    <uses-feature android:glEsVersion="0x00030000" android:required="true" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.hardware.gamepad" android:required="false" />
+
+    <!-- No Java or Kotlin: everything runs in liblume.so. -->
+    <application
+        android:label="Lume"
+        android:hasCode="false"
+        android:appCategory="game"
+        android:isGame="true">
+
+        <!-- Config changes are handled by the game, so the activity is never
+             recreated (and the game state never lost) on rotation and the like. -->
+        <activity
+            android:name="android.app.NativeActivity"
+            android:exported="true"
+            android:label="Lume"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density">
+
+            <meta-data android:name="android.app.lib_name" android:value="lume" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

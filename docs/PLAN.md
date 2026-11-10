@@ -88,7 +88,7 @@ do sapo, câmera que antecipa e abre com o enxame. Tudo listado em
 
 | Risco | Como eu trato |
 | --- | --- |
-| Render-to-texture falhar em algum GPU (GLES 3.0) | testado em GL 3.3 e GLES 3.0 no headless e no Android simulado; se o alvo não puder ser criado, a engine avisa e o jogo cai no véu com um furo |
+| Render-to-texture falhar em algum GPU | RGBA8 como alvo é garantido por GL 3.3 e GLES 3.0, e foi testado nos dois (headless e Android simulado); se mesmo assim falhar, a engine registra no log e pula o alvo, e a cena fica só em silhuetas |
 | Haptics e dp só se confirmam em aparelho | eu testo no Android simulado; a confirmação final é sua no celular |
 | Tempo de frame medido aqui é com GL por software | reporto o tempo de CPU do jogo (`debug.timed`); o número de GPU real vem do seu PC e do celular |
 | "Divertido" não se mede por robô | o robô acha números quebrados; o julgamento final é seu no aparelho |

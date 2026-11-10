@@ -12,15 +12,19 @@ atualizado.
 
 | # | Lacuna | Bloqueia? | Contorno |
 | --- | --- | --- | --- |
-| 1 | Render-to-texture | não | véu preto com um furo + brilho aditivo |
-| 2 | Blend multiplicar / máximo | não | o mesmo véu |
+| 1 | Render-to-texture | **fechada** em `00d72eb` | |
+| 2 | Blend multiplicar / máximo | multiplicar **fechado** em `00d72eb`; máximo não | halos mais fracos em enxame grande |
 | 3 | Janela no Linux | **sem contorno** | Linux só headless; desktop = Windows |
 | 4 | Haptics | não | nenhum (a Fase 3 pede "se a engine expuser") |
 | 5 | Toques no Win32 | não | mouse; botão direito e Espaço para apagar |
-| 6 | Roteiro headless só com um dedo | não | robô de debug no jogo + testes da simulação |
+| 6 | Roteiro headless só com um dedo | **fechada** em `00d72eb` | |
 | 7 | Densidade da tela (dp) | não | alvo de toque fixo em unidades virtuais |
 
 ## 1. Render-to-texture
+
+**Fechada em `00d72eb`:** `render.beginTarget` / `endTarget`, testado em GL
+3.3 e GLES 3.0 (o canto escuro do exemplo da engine). Abaixo, o registro
+original.
 
 - **Falta:** desenhar numa textura e usá-la depois. O backend só tem o
   framebuffer do mapa de sombras 3D, interno.
@@ -35,6 +39,9 @@ atualizado.
   outras só brilham.
 
 ## 2. Modos de blend
+
+**`.multiply` entrou em `00d72eb`.** `max` continua de fora: o jogo se vira
+enfraquecendo os halos. Abaixo, o registro original.
 
 - **Falta:** só há `.alpha` e `.additive`.
 - **Por quê:** com `multiply` (`DST_COLOR, ZERO`) e a lacuna 1 fechada, o
@@ -72,6 +79,9 @@ atualizado.
   no botão direito ou no Espaço.
 
 ## 6. Roteiro headless
+
+**Fechada em `00d72eb`:** `finger2`, `right` e `hold`, e o primeiro dedo
+também em `input.touches`. Abaixo, o registro original.
 
 - **Falta:** `--input` só tem `tap`, `drag`, `back` e `shot`: um dedo, sem
   botão direito, sem teclas.

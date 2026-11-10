@@ -1,7 +1,7 @@
 # Pequi: o que o Lume usa
 
-Notas da leitura do `pequi` em `b548108` (API de plataforma versão 11, Zig
-0.17.0). Tudo que o jogo fizer precisa bater com este arquivo; se a engine
+Notas da leitura do `pequi`, atualizadas para `00d72eb` (API de plataforma
+versão 12, Zig 0.17.0), que já tem as mudanças pedidas pelo Lume. Tudo que o jogo fizer precisa bater com este arquivo; se a engine
 mudar, ele muda junto.
 
 ## 1. As quatro perguntas
@@ -9,13 +9,12 @@ mudar, ele muda junto.
 | Recurso | Há? | Onde | Consequência para o Lume |
 | --- | --- | --- | --- |
 | Blending aditivo | **Sim** | `pequi.render.setBlend(render, .additive)` (GL: `SRC_ALPHA, ONE`) | brilho, bloom falso e partículas de luz |
-| Render-to-texture | **Não** | o único framebuffer é o do mapa de sombras 3D, interno ao backend | a escuridão é um véu preto com um furo (seção 6); lacuna 1 |
+| Render-to-texture | **Sim, desde `00d72eb`** | `render.beginTarget(render, texture)` / `endTarget(render)`; não havia na primeira leitura (lacuna 1) | mapa de luz e textura das cores iluminadas (seção 6) |
 | Multitouch | **Sim, no Android** | `input.touches: [10]Touch` com `id`, `x`, `y`, `down`, `pressed`, `released` | dois dedos = apagar. No Win32 `touches` fica vazio (só mouse); lacuna 5 |
 | Vários sons com pitch | **Sim** | `Mixer`: 64 vozes, `PlayOptions.pitch`, `setPitch`, `setVolume` com rampa | escala de resgates com um som só; ambiente em camadas |
 
-Também não há: outros modos de blend (multiplicar, máximo), haptics, janela
-no Linux, densidade da tela (dp), teclas além das mapeadas. Ver
-`ENGINE_GAPS.md`.
+O blend `.multiply` entrou junto. Ainda não há: haptics, janela no Linux,
+densidade da tela (dp), teclas além das mapeadas. Ver `ENGINE_GAPS.md`.
 
 ## 2. Fronteira engine/jogo
 
@@ -119,7 +118,8 @@ rect(render, x0, y0, x1, y1, rgba)
 rectOutline(render, x0, y0, x1, y1, thickness, rgba)
 sprite(render, texture, x0, y0, x1, y1, uv: UvRect, tint)
 spriteRotated(render, texture, cx, cy, w, h, angle, uv, tint)   // radianos, horário
-setBlend(render, .alpha | .additive)
+setBlend(render, .alpha | .additive | .multiply)
+beginTarget(render, texture) / endTarget(render)   // desenhar numa textura
 color(r, g, b, a) u32 / rgb(r, g, b)      // RGBA8, vermelho no byte baixo
 text(render, x, y, size, bytes, rgba)     // fonte 8x8 embutida
 textFont(render, font, x, y, scale, bytes, rgba) / textFontWidth(font, scale, bytes)
@@ -144,19 +144,26 @@ uploadTexture(render, texture, pixels: []const u32, filter) bool   // .nearest/.
 - `pequi.debug`: `timed("nome")` / `.end()`, `drawOverlay`; ligado em Debug
   e ReleaseSafe (`pequi.internal`).
 
-**A luz do Lume com o que existe** (sem render-to-texture):
-1. céu e silhuetas desenhados com suas cores "reveladas";
-2. **véu de escuridão**: um sprite preto com um furo radial macio (textura
-   gerada: alfa 0 no centro, 1 na borda) centrado no enxame, mais quatro
-   retângulos pretos em volta. O raio do furo segue o tamanho do enxame;
-   o alfa do véu (~0,93) é a "escuridão quase total". Pulsar abre o furo
-   até cobrir a tela e fecha; apagar fecha o furo;
-3. por cima do véu, em aditivo: halo de cada vaga-lume, perdidos piscando,
-   olhos de predador, larvas do cupinzeiro, partículas.
+**Desenhar em textura.** Entre `beginTarget` e `endTarget` o desenho 2D
+vai para a textura (uma vaga de `Textures.create`, de qualquer tamanho,
+nunca enviada com `uploadTexture`). O alvo representa a tela inteira: as
+transformações valem como na tela, então um alvo pequeno desenhado com a
+câmera da cena e depois esticado sobre a tela casa com ela. `clear` limpa o
+alvo. Alvos não se aninham, não recebem cenas 3D e não podem ser desenhados
+em si mesmos. Depois de `gpu_resources_lost` é só desenhar de novo.
 
-Limite conhecido: só **um** furo compõe direito com blend alfa. Outras
-fontes de luz brilham (aditivo) mas não revelam o cenário em volta. Na
-vitória o véu inteiro se desfaz.
+**A luz do Lume**, todo frame:
+1. céu e silhuetas de tudo, direto na tela;
+2. **mapa de luz** (alvo de 135x300): limpo em preto, e cada luz somada em
+   aditivo (o enxame, cada vaga-lume, o pulso, os perdidos, o cupinzeiro);
+3. **cores** (alvo de 540x1200): a cena com as cores que a luz revela, e
+   por cima o mapa de luz em `.multiply`; fica colorido só onde há luz;
+4. as cores somadas (aditivo) sobre as silhuetas da tela;
+5. o que brilha sozinho (vaga-lumes, olhos do sapo, larvas, partículas),
+   as folhas escuras do primeiro plano e o HUD.
+
+Não há blend "máximo": muitos halos no mesmo ponto estouram para branco,
+então o halo de cada vaga-lume enfraquece conforme o enxame cresce.
 
 ## 7. Áudio
 
@@ -220,10 +227,12 @@ pequi.addScriptedRun(b, game, shots, script, frames, "720x1280", "shots/<nome>")
 | `zig build android` | bibliotecas e assets para o Gradle em `android/` | qualquer sistema |
 | `zig build check-android` | a biblioteca Android num ciclo de vida simulado | Linux x86_64 + Mesa |
 | `zig build check-render` | renderiza sem janela em GL 3.3 e GLES 3.0 | Linux + Mesa |
-| `zig build shots` | roteiros de toque (`tap`, `drag`, `back`, `shot`) com capturas | Linux + Mesa |
+| `zig build shots` | roteiros de toque e botões com capturas | Linux + Mesa |
 
-- A plataforma headless só roteiriza o primeiro dedo (botão esquerdo) e o
-  Voltar: não há segundo dedo, botão direito nem teclas (lacuna 6).
+- Roteiro da headless (`--input`): `tap`, `drag`, `finger2 F x y N` (segundo
+  dedo), `right F N` (botão direito), `hold F <botão> N` (por exemplo
+  `action_down`, o Espaço), `back`, `shot`. O primeiro dedo também aparece
+  em `input.touches`, como no Android.
 - O APK sai do CI (este ambiente não alcança o Android SDK).
 
 ## 10. Convenções herdadas do Cerrado e do Safra

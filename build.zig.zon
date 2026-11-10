@@ -1,0 +1,18 @@
+.{
+    .name = .lume,
+    .version = "0.1.0",
+    .fingerprint = 0xef05bd21a9400b30,
+    .minimum_zig_version = "0.17.0",
+    .dependencies = .{
+        // The engine, cloned next to this repository (as CI does too).
+        .pequi = .{ .path = "../pequi" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "tools",
+        "docs",
+        "README.md",
+    },
+}

@@ -1,0 +1,13 @@
+# A short walk: guide up, rescue, pulse, go dark with two fingers.
+shot 30 start.ppm
+drag 40 270 600 270 300 200
+shot 200 moving.ppm
+tap 330 270 640
+shot 345 pulse.ppm
+shot 420 after_pulse.ppm
+drag 460 270 600 200 320 300
+finger2 600 400 900 160
+shot 700 dark.ppm
+shot 900 lit_again.ppm
+drag 920 270 600 300 300 500
+shot 1200 later.ppm

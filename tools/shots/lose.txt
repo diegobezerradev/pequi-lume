@@ -1,0 +1,8 @@
+# Losing on purpose: fly straight to the first frog and stay there, shining.
+drag 20 260 380 260 380 280
+shot 310 arrived.ppm
+shot 420 frog_a.ppm
+shot 480 frog_b.ppm
+shot 700 fewer.ppm
+shot 1400 last.ppm
+shot 2100 end.ppm

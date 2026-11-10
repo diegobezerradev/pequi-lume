@@ -1,0 +1,11 @@
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+# Release signing: secrets, never committed.
+keystore.properties
+*.jks
+*.keystore

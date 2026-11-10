@@ -1,0 +1,123 @@
+# Checks Lume on every push and pull request, and once a day so that
+# changes in the engine (a separate repository) are caught too.
+#
+# The engine repository is private: it is checked out next to this one with
+# the PEQUI_TOKEN secret, a fine-grained token with read access to
+# diegobezerradev/pequi (Contents: Read-only).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "43 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: pequi-lume
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: pequi-lume
+      - uses: actions/checkout@v5
+        with:
+          repository: diegobezerradev/pequi
+          token: ${{ secrets.PEQUI_TOKEN }}
+          path: pequi
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - name: Install Mesa (EGL, OpenGL, GLES)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libegl-mesa0 libgl1-mesa-dri libgles2
+      - name: Formatting
+        run: zig fmt --check build.zig src tools
+      - name: Tests
+        run: zig build test
+      - name: The robots play every level
+        run: zig build robots
+      - name: Build for Windows (Debug and ReleaseFast)
+        run: |
+          zig build -Dtarget=x86_64-windows
+          zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast
+      - name: Windows release (executable, game library and data)
+        run: zig build -Dtarget=x86_64-windows -Doptimize=ReleaseFast --prefix zig-out/windows
+      - name: Keep the Windows release
+        uses: actions/upload-artifact@v5
+        with:
+          name: lume-windows
+          path: pequi-lume/zig-out/windows/bin/
+      - name: Render check (GL 3.3 and GLES 3.0, offscreen)
+        run: zig build check-render
+      - name: Android check (simulated lifecycle)
+        run: zig build check-android
+      - name: Keep the rendered frames
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: frames
+          path: |
+            pequi-lume/zig-out/render-check/
+            pequi-lume/zig-out/android-check/
+          if-no-files-found: ignore
+
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: pequi-lume
+      - uses: actions/checkout@v5
+        with:
+          repository: diegobezerradev/pequi
+          token: ${{ secrets.PEQUI_TOKEN }}
+          path: pequi
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Build the APK (Gradle calls zig build android)
+        working-directory: pequi-lume/android
+        run: ./gradlew --no-daemon assembleDebug
+      - name: Keep the APK
+        uses: actions/upload-artifact@v5
+        with:
+          name: lume-debug-apk
+          path: pequi-lume/android/app/build/outputs/apk/debug/*.apk
+      - name: Build the release bundle (AAB for Google Play)
+        working-directory: pequi-lume/android
+        env:
+          # Google Play wants a bigger versionCode for every upload.
+          PEQUI_VERSION_CODE: ${{ github.run_number }}
+          # The upload key, if the repository has it (see android/keystore.properties.example).
+          PEQUI_KEYSTORE_BASE64: ${{ secrets.PEQUI_KEYSTORE_BASE64 }}
+          PEQUI_KEYSTORE_PASSWORD: ${{ secrets.PEQUI_KEYSTORE_PASSWORD }}
+          PEQUI_KEY_ALIAS: ${{ secrets.PEQUI_KEY_ALIAS }}
+          PEQUI_KEY_PASSWORD: ${{ secrets.PEQUI_KEY_PASSWORD }}
+        run: |
+          if [ -n "$PEQUI_KEYSTORE_BASE64" ]; then
+            echo "$PEQUI_KEYSTORE_BASE64" | base64 -d > upload.jks
+            export PEQUI_KEYSTORE_FILE=upload.jks
+          fi
+          ./gradlew --no-daemon bundleRelease
+          rm -f upload.jks
+      - name: Keep the release bundle
+        uses: actions/upload-artifact@v5
+        with:
+          name: lume-release-aab
+          path: pequi-lume/android/app/build/outputs/bundle/release/*.aab
