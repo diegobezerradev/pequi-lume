@@ -39,6 +39,8 @@ const App = struct {
     progress: Progress,
 
     screen: Screen,
+    /// A screen fades in from the dark: 1 just after a change, then to 0.
+    fade: f32,
     /// Seconds on the menus, for what moves on them.
     time: f32,
     reader: Reader,
@@ -67,6 +69,7 @@ fn init(memory: *pequi.GameMemory) *App {
     }
     app.progress = Progress.load(api);
     app.screen = .title;
+    app.fade = 1;
     app.time = 0;
     app.reader = .{};
     app.menu = .{};
@@ -128,13 +131,15 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
                 if (app.progress.record(index, app.game.sim.stars())) app.progress.save(api);
             },
             .map => goTo(app, .map),
-            .next => app.game.start(index + 1),
+            .next => {
+                app.game.start(index + 1);
+                app.fade = 1;
+            },
         }
     } else {
         app.time += input.dt;
         // The menus keep the night's sound, quieter.
         app.sounds.ambience(&app.mixer, .{ 0.35, 0.2, 0.03 });
-        app.sounds.update(&app.mixer, input.dt);
         const ui = Ui.init(input, render, &app.art, font, app.reader.read(input));
         const action: screens.Action = switch (app.screen) {
             .title => screens.title(&ui, input, app.time),
@@ -156,6 +161,13 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
         if (app.screen == .title and action == .none and ui.pointer.back) input.quit_requested = true;
     }
 
+    if (app.fade > 0) {
+        app.fade = @max(0, app.fade - input.dt / 0.4);
+        pequi.render.setScreenSpace(render);
+        pequi.render.setBlend(render, .alpha);
+        pequi.render.rect(render, 0, 0, @floatFromInt(render.width), @floatFromInt(render.height), pequi.render.color(0, 0.005, 0.02, app.fade * app.fade));
+    }
+
     // F1 or ` (three fingers on Android), in Debug and ReleaseSafe builds.
     if (input.debug_toggle) app.show_debug = !app.show_debug;
     if (pequi.internal and app.show_debug) {
@@ -165,6 +177,7 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
 
 fn goTo(app: *App, screen: Screen) void {
     app.screen = screen;
+    app.fade = 1;
     app.reader = .{};
     app.menu = .{};
 }

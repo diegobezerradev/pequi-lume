@@ -13,9 +13,10 @@ Nacional das Emas. Feito na engine
 
 ## Estado
 
-**Fase 2 (jogo completo):** 12 fases em três regiões, com título, mapa,
-pausa, ajustes e progresso salvo. A arte e os sons são feitos em código;
-o polimento de game feel é a Fase 3 (`docs/PLAN.md`).
+**Completo nas três fases do plano:** 12 fases em três regiões, com
+título, mapa, pausa, ajustes, progresso salvo e o polimento de game feel
+(`docs/FEEL.md`). A arte e os sons são feitos em código. Falta o teste em
+aparelho; as pendências estão em `docs/BACKLOG.md`.
 
 ## Como se joga
 
@@ -95,6 +96,7 @@ docs/
   ENGINE_NOTES.md  o que o jogo usa da engine
   ENGINE_GAPS.md   o que faltava nela, e o que foi feito
   PLAN.md          o plano
+  FEEL.md          cada elemento de game feel
   BACKLOG.md       pendências
 ```
 

@@ -80,7 +80,7 @@ roteiro); relatório com tempos de frame.
   feitas em código; paralaxe de 4 camadas, vegetação balançando. Arte
   ilustrada ficou no `BACKLOG.md`.
 
-## Fase 3: game feel
+## Fase 3: game feel (feita)
 
 Cascata do cupinzeiro, hit-stop e rastro na perda, antecipação da coruja e
 do sapo, câmera que antecipa e abre com o enxame. Tudo listado em

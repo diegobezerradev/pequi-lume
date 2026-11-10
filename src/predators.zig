@@ -96,7 +96,7 @@ pub fn updateWebs(s: *Sim, events: *sim.Events) void {
         if (best) |f| {
             f.state = .taken;
             web.stuck -= 1;
-            events.add(.{ .kind = .taken, .x = f.x, .y = f.y, .value = s.swarm });
+            events.add(.{ .kind = .taken, .x = f.x, .y = f.y, .value = s.swarm, .by_x = web.x, .by_y = web.y });
         }
     }
 }

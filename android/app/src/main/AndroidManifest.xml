@@ -7,6 +7,9 @@
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
     <!-- No Java or Kotlin: everything runs in liblume.so. -->
+    <!-- Haptics (PlatformApi.vibrate). -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <application
         android:label="Lume"
         android:hasCode="false"

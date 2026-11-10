@@ -35,9 +35,6 @@ pub const Sounds = extern struct {
     crickets_handle: pequi.audio.Handle,
     frogs_handle: pequi.audio.Handle,
     wind_handle: pequi.audio.Handle,
-    /// The mound's chord: notes still to play, and the wait for the next.
-    chord_next: u32,
-    chord_timer: f32,
     ready: bool,
 
     pub fn init(s: *Sounds, arena: *pequi.Arena) void {
@@ -88,8 +85,6 @@ pub const Sounds = extern struct {
         s.crickets_handle = .none;
         s.frogs_handle = .none;
         s.wind_handle = .none;
-        s.chord_next = chord.len;
-        s.chord_timer = 0;
         s.ready = true;
     }
 
@@ -125,20 +120,17 @@ pub const Sounds = extern struct {
         return std.math.clamp((x - center) / 400, -0.8, 0.8);
     }
 
-    /// Starts the mound's chord; `update` adds a note at a time.
-    pub fn startChord(s: *Sounds) void {
-        s.chord_next = 0;
-        s.chord_timer = 0;
+    pub const chord_notes = chord.len;
+
+    /// One note of the mound's chord (0 is the lowest); the game plays them
+    /// as the light climbs the mound.
+    pub fn chordNote(s: *const Sounds, mixer: *pequi.audio.Mixer, index: usize) void {
+        _ = mixer.play(&s.note, .{ .volume = 0.7, .pitch = semitones(chord[@min(index, chord.len - 1)]) * 0.75 });
     }
 
-    pub fn update(s: *Sounds, mixer: *pequi.audio.Mixer, dt: f32) void {
-        if (s.chord_next >= chord.len) return;
-        s.chord_timer -= dt;
-        if (s.chord_timer > 0) return;
-        _ = mixer.play(&s.note, .{ .volume = 0.7, .pitch = semitones(chord[s.chord_next]) * 0.75 });
-        s.chord_next += 1;
-        // Slower at first, then the notes tumble in.
-        s.chord_timer = 0.42 - 0.035 * @as(f32, @floatFromInt(s.chord_next));
+    /// A star on the end screen: the first, second or third, each higher.
+    pub fn star(s: *const Sounds, mixer: *pequi.audio.Mixer, index: usize) void {
+        _ = mixer.play(&s.note, .{ .volume = 0.6, .pitch = semitones(12 + 4 * @as(f32, @floatFromInt(index))) });
     }
 };
 

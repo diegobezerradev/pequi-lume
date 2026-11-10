@@ -216,6 +216,9 @@ pub const Event = struct {
     x: f32 = 0,
     y: f32 = 0,
     value: u32 = 0,
+    /// `taken`: where the predator that took it is.
+    by_x: f32 = 0,
+    by_y: f32 = 0,
 };
 
 /// What happened in one or more steps. When full, later events are dropped.
@@ -457,7 +460,7 @@ pub const Sim = struct {
         const f = &s.flies[i];
         f.state = .taken;
         s.swarm -= 1;
-        events.add(.{ .kind = .taken, .x = f.x, .y = f.y, .value = s.swarm });
+        events.add(.{ .kind = .taken, .x = f.x, .y = f.y, .value = s.swarm, .by_x = x, .by_y = y });
         return .{ f.x, f.y };
     }
 

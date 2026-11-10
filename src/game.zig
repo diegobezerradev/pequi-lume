@@ -58,6 +58,18 @@ const larva_count = 44;
 
 const Pass = enum { silhouette, color };
 
+const Ghost = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+    to_x: f32 = 0,
+    to_y: f32 = 0,
+    /// 0 to 1; done at 1.
+    t: f32 = 1,
+};
+
+const ghost_seconds: f32 = 0.55;
+const cascade_seconds: f32 = 2.6;
+
 /// Averages and peaks of the frame's cost, for the stress test's log.
 const Perf = struct {
     frames: u32 = 0,
@@ -75,7 +87,7 @@ pub const Game = struct {
     cam_x: f32,
     cam_y: f32,
     zoom: f32,
-    particles: juice.Particles(700),
+    particles: juice.Particles(1200),
     fx: juice.Rng,
     decor: [max_decor]Decor,
     decor_count: u32,
@@ -97,6 +109,17 @@ pub const Game = struct {
     did_dark: bool,
     /// Short freeze when a predator takes one.
     hit_stop: f32,
+    /// Fireflies just taken: their light is pulled to the predator and dies.
+    ghosts: [12]Ghost,
+    /// The pulse's kick on the camera, fading from 1.
+    punch: f32,
+    /// The swarm count grew or shrank: the number jumps.
+    count_bump: f32,
+    last_swarm: u32,
+    /// The mound's cascade: larvae lit and stars shown so far.
+    larvae_lit: u32,
+    stars_shown: u32,
+    trail_timer: f32,
 
     pub fn start(g: *Game, level_index: u32) void {
         const level = levels.get(level_index);
@@ -121,6 +144,13 @@ pub const Game = struct {
         g.did_pulse = false;
         g.did_dark = false;
         g.hit_stop = 0;
+        g.ghosts = @splat(.{});
+        g.punch = 0;
+        g.count_bump = 0;
+        g.last_swarm = g.sim.swarm;
+        g.larvae_lit = 0;
+        g.stars_shown = 0;
+        g.trail_timer = 0;
         g.plant(level);
     }
 
@@ -238,10 +268,29 @@ pub const Game = struct {
             // The camera looks a little ahead of the leader, and backs away
             // as the swarm grows.
             const me = g.sim.flies[sim.leader];
-            g.cam_x = juice.approach(g.cam_x, me.x + me.vx * 0.4, 0.22, dt);
-            g.cam_y = juice.approach(g.cam_y, me.y + me.vy * 0.4, 0.22, dt);
-            const wanted_zoom = std.math.clamp(1.0 - (@as(f32, @floatFromInt(g.sim.swarm)) - 8) * 0.0035, 0.74, 1.0);
+            var look_x = me.x + me.vx * 0.4;
+            var look_y = me.y + me.vy * 0.4;
+            var wanted_zoom = std.math.clamp(1.0 - (@as(f32, @floatFromInt(g.sim.swarm)) - 8) * 0.0035, 0.74, 1.0);
+            if (g.sim.outcome == .won) {
+                // The mound takes the stage.
+                look_x = g.sim.mound_x;
+                look_y = g.sim.mound_y - 40;
+                wanted_zoom = 1.05;
+            }
+            g.cam_x = juice.approach(g.cam_x, look_x, if (playing) 0.22 else 0.5, dt);
+            g.cam_y = juice.approach(g.cam_y, look_y, if (playing) 0.22 else 0.5, dt);
             g.zoom = juice.approach(g.zoom, wanted_zoom, 0.8, dt);
+            g.punch = @max(0, g.punch - dt * 3);
+            g.count_bump = @max(0, g.count_bump - dt * 4);
+            if (g.sim.swarm != g.last_swarm) {
+                g.last_swarm = g.sim.swarm;
+                g.count_bump = 1;
+            }
+            for (&g.ghosts) |*ghost| {
+                if (ghost.t < 1) ghost.t = @min(1, ghost.t + dt / ghost_seconds);
+            }
+            g.leaveTrails(dt);
+            if (g.sim.outcome == .won) g.cascade(f);
             const half_w = w / 2 / g.zoom;
             const half_h = h / 2 / g.zoom;
             g.cam_x = if (g.sim.width > half_w * 2) std.math.clamp(g.cam_x, half_w, g.sim.width - half_w) else g.sim.width / 2;
@@ -249,7 +298,6 @@ pub const Game = struct {
 
             g.particles.update(dt);
             g.flash = @max(0, g.flash - dt * 3.5);
-            f.sounds.update(f.mixer, dt);
             if (g.sim.outcome == .won and !g.reported) {
                 g.reported = true;
                 action = .won;
@@ -341,8 +389,16 @@ pub const Game = struct {
             ui.centered(w / 2, y, 60, "Aceso!", draw.color(0.85, 1, 0.5, a));
             const stars = s.stars();
             for (0..3) |i| {
-                const on = i < stars and g.end_time > wait + 0.6 + @as(f32, @floatFromInt(i)) * 0.4;
-                ui.star(w / 2 + (@as(f32, @floatFromInt(i)) - 1) * 84, y + 130, 44, on, a);
+                const since = g.end_time - (wait + 0.6 + @as(f32, @floatFromInt(i)) * 0.4);
+                const on = i < stars and since > 0;
+                if (on and g.stars_shown == i) {
+                    g.stars_shown += 1;
+                    f.sounds.star(f.mixer, i);
+                    buzz(14, 0.5);
+                }
+                // Each star lands a little too big and settles.
+                const pop = 1 + 0.5 * (1 - juice.Ease.apply(.out_cubic, std.math.clamp(since / 0.3, 0, 1)));
+                ui.star(w / 2 + (@as(f32, @floatFromInt(i)) - 1) * 84, y + 130, 44 * (if (on) pop else 1), on, a);
             }
             const line = std.fmt.bufPrint(&buffer, "{d} vaga-lumes chegaram", .{s.swarm}) catch "";
             ui.centered(w / 2, y + 186, 22, line, draw.color(0.82, 0.87, 0.95, a));
@@ -414,8 +470,18 @@ pub const Game = struct {
                     g.sparks(e.x, e.y, 16, 150, draw.rgb(1, 0.55, 0.3));
                     g.flash = 1;
                     g.hit_stop = 0.07;
+                    buzz(35, 0.9);
+                    // Its light is dragged off to whoever took it.
+                    var slot: *Ghost = &g.ghosts[0];
+                    for (&g.ghosts) |*ghost| {
+                        if (ghost.t > slot.t) slot = ghost;
+                    }
+                    slot.* = .{ .x = e.x, .y = e.y, .to_x = e.by_x, .to_y = e.by_y, .t = 0 };
                 },
-                .stuck => s.play(f.mixer, &s.stuck, 0.7, 0.9 + g.fx.range(0, 0.3), pan),
+                .stuck => {
+                    s.play(f.mixer, &s.stuck, 0.7, 0.9 + g.fx.range(0, 0.3), pan);
+                    buzz(10, 0.3);
+                },
                 .freed => {
                     s.rescued(f.mixer, 3 + e.value, pan);
                     g.sparks(e.x, e.y, 20, 200, draw.rgb(0.85, 0.9, 1));
@@ -428,6 +494,8 @@ pub const Game = struct {
                 .pulse => {
                     s.play(f.mixer, &s.pulse, 0.9, 1, 0);
                     g.sparks(e.x, e.y, 30, 320, draw.rgb(0.9, 1, 0.6));
+                    g.punch = 1;
+                    buzz(18, 0.45);
                 },
                 .pulse_denied => {},
                 .dark_on => s.play(f.mixer, &s.dark_on, 0.7, 1, 0),
@@ -439,15 +507,61 @@ pub const Game = struct {
                 },
                 .frog_miss => s.play(f.mixer, &s.miss, 0.6, 1, pan),
                 .mound_denied => s.play(f.mixer, &s.denied, 0.7, 1, pan),
-                .won => {
-                    s.startChord();
-                    g.end_time = 0;
-                },
+                .won => g.end_time = 0,
                 .lost => {
                     s.play(f.mixer, &s.lose, 0.9, 1, 0);
                     g.end_time = 0;
+                    buzz(60, 0.6);
                 },
             }
+        }
+    }
+
+    /// Where larva `i` of the mound sits: higher ones closer to the middle.
+    fn larva(g: *const Game, i: usize) [2]f32 {
+        const order = @as(f32, @floatFromInt(i)) / larva_count;
+        const hx = hash(@intCast(i), 3, 901) - 0.5;
+        return .{ g.sim.mound_x + hx * (100 - order * 60), g.sim.mound_y + 20 - order * 160 };
+    }
+
+    /// The mound lights from the base up: each larva with a spark, the
+    /// chord one note higher every few, a last burst at the top.
+    fn cascade(g: *Game, f: *const Frame) void {
+        const lit: u32 = @intFromFloat(std.math.clamp(g.end_time / cascade_seconds, 0, 1) * larva_count);
+        const per_note = larva_count / Sounds.chord_notes;
+        while (g.larvae_lit < lit) : (g.larvae_lit += 1) {
+            const p = g.larva(g.larvae_lit);
+            g.sparks(p[0], p[1], 3, 70, draw.rgb(0.75, 1, 0.5));
+            if (g.larvae_lit % per_note == 0) {
+                f.sounds.chordNote(f.mixer, g.larvae_lit / per_note);
+                buzz(12, 0.35);
+            }
+            if (g.larvae_lit + 1 == larva_count) {
+                g.sparks(g.sim.mound_x, g.sim.mound_y - 150, 60, 380, draw.rgb(0.9, 1, 0.6));
+                g.punch = 1;
+                buzz(70, 1);
+            }
+        }
+    }
+
+    /// Fireflies called by a pulse draw a thin line of light as they come.
+    fn leaveTrails(g: *Game, dt: f32) void {
+        g.trail_timer -= dt;
+        if (g.trail_timer > 0) return;
+        g.trail_timer = 0.045;
+        for (g.sim.flies[1..g.sim.fly_count]) |fly| {
+            if (fly.state != .called) continue;
+            g.particles.emit(.{
+                .x = fly.x,
+                .y = fly.y,
+                .life = 0.5,
+                .size_start = 7,
+                .size_end = 1,
+                .color_start = draw.color(0.75, 1, 0.4, 0.6),
+                .color_end = draw.color(0.75, 1, 0.4, 0.6),
+                .fade_out = 1,
+                .blend = .additive,
+            });
         }
     }
 
@@ -481,6 +595,11 @@ pub const Game = struct {
         const art = f.art;
         const w: f32 = @floatFromInt(render.width);
         const h: f32 = @floatFromInt(render.height);
+
+        // A pulse pushes the camera back for a moment.
+        const zoom = g.zoom;
+        g.zoom = zoom * (1 - 0.035 * juice.Ease.apply(.out_cubic, g.punch));
+        defer g.zoom = zoom;
 
         // 1. The night, and everything as a silhouette against it.
         draw.clear(render, 0, 0, 0);
@@ -533,6 +652,8 @@ pub const Game = struct {
         g.drawOwls(f);
         g.drawCanopy(f);
         draw.setScreenSpace(render);
+        // Dark, the whole night closes in a little.
+        if (g.sim.glow < 1) draw.rect(render, 0, 0, w, h, draw.color(0, 0.005, 0.03, (1 - g.sim.glow) * 0.3));
         if (g.flash > 0) draw.rect(render, 0, 0, w, h, draw.color(1, 0.25, 0.1, g.flash * 0.22));
         if (g.sim.level_index == 0) g.drawTutorial(f, ui);
     }
@@ -890,7 +1011,7 @@ pub const Game = struct {
     /// How lit the mound is: 0 before the win, rising to 1 in the cascade.
     fn moundLight(g: *const Game) f32 {
         if (g.sim.outcome != .won) return 0;
-        return juice.Ease.apply(.out_cubic, std.math.clamp(g.end_time / 3.2, 0, 1));
+        return juice.Ease.apply(.in_out_cubic, std.math.clamp(g.end_time / (cascade_seconds + 0.6), 0, 1));
     }
 
     /// Everything that gives light, into the light map.
@@ -967,6 +1088,20 @@ pub const Game = struct {
             }
         }
 
+        // The light of the ones just taken: pulled away, shrinking, gone.
+        for (g.ghosts) |ghost| {
+            if (ghost.t >= 1) continue;
+            const k = ghost.t * ghost.t * ghost.t;
+            for (0..6) |i| {
+                // A short tail behind the light.
+                const back = std.math.clamp(k - @as(f32, @floatFromInt(i)) * 0.06, 0, 1);
+                const x = ghost.x + (ghost.to_x - ghost.x) * back;
+                const y = ghost.y + (ghost.to_y - ghost.y) * back;
+                const r = (14 - @as(f32, @floatFromInt(i)) * 1.8) * (1 - ghost.t * 0.6);
+                draw.sprite(render, glow_tex, x - r, y - r, x + r, y + r, .{}, draw.color(1, 0.75, 0.35, (1 - ghost.t) * (1 - @as(f32, @floatFromInt(i)) / 6)));
+            }
+        }
+
         // Webs shown by a pulse, or given away by who is stuck in them.
         for (s.webs[0..s.web_count]) |web| {
             if (!g.visible(f, web.x, web.y, web.r)) continue;
@@ -989,7 +1124,14 @@ pub const Game = struct {
 
         // Many halos on one spot would burn to white: each dims as they crowd.
         const crowd = @min(1.0, 4.5 / @sqrt(@as(f32, @floatFromInt(@max(s.swarm, 1)))));
-        for (s.flies[0..s.fly_count], 0..) |fly, i| {
+        for (s.flies[0..s.fly_count], 0..) |sim_fly, i| {
+            // Drawn a little ahead, by the time the simulation has not run
+            // yet: steady motion on screens that are not 60 or 120 Hz.
+            var fly = sim_fly;
+            if (fly.state != .stuck and !g.paused and g.hit_stop <= 0) {
+                fly.x += fly.vx * g.accumulator;
+                fly.y += fly.vy * g.accumulator;
+            }
             if (!g.visible(f, fly.x, fly.y, 40)) continue;
             switch (fly.state) {
                 .lost, .called => {
@@ -1022,12 +1164,11 @@ pub const Game = struct {
         if (g.sim.outcome == .won) {
             for (0..larva_count) |i| {
                 const order = @as(f32, @floatFromInt(i)) / larva_count;
-                const on = std.math.clamp((g.end_time - order * 2.6) / 0.35, 0, 1);
+                const on = std.math.clamp((g.end_time - order * cascade_seconds) / 0.35, 0, 1);
                 if (on <= 0) continue;
-                const hx = hash(@intCast(i), 3, 901) - 0.5;
-                // Higher larvae sit closer to the middle: the tower narrows.
-                const lx = s.mound_x + hx * (100 - order * 60);
-                const ly = s.mound_y + 20 - order * 160;
+                const p = g.larva(i);
+                const lx = p[0];
+                const ly = p[1];
                 const twinkle = 0.75 + 0.25 * @sin(g.time * 6 + @as(f32, @floatFromInt(i)));
                 const size = 16 * juice.Ease.apply(.out_back, on);
                 draw.sprite(render, glow_tex, lx - size, ly - size, lx + size, ly + size, .{}, draw.color(0.65, 1, 0.5, twinkle));
@@ -1050,7 +1191,7 @@ pub const Game = struct {
         // The swarm, and what the mound asks for.
         const enough = s.swarm >= s.need;
         const count = std.fmt.bufPrint(&buffer, "{d} / {d}", .{ s.swarm, s.need }) catch "";
-        const size: f32 = 30;
+        const size: f32 = 30 + 9 * juice.Ease.apply(.out_cubic, g.count_bump);
         const tw = ui.width(size, count);
         const tint = if (enough) ui_mod.light_color else ui_mod.text_color;
         draw.sprite(render, f.art.glow, w / 2 - tw / 2 - 40, top - 4, w / 2 - tw / 2 - 2, top + 34, .{}, draw.color(0.8, 1, 0.4, 0.9));
@@ -1093,6 +1234,11 @@ pub const Game = struct {
         if (pequi.internal and g.robot_on) ui.text(12, top, 14, "robô", draw.rgb(1, 0.6, 0.3));
     }
 };
+
+/// A short buzz on phones (nothing elsewhere).
+fn buzz(milliseconds: u32, strength: f32) void {
+    pequi.platformApi().vibrate(milliseconds, strength);
+}
 
 /// Keeps the volumes for next time; a failure only goes to the log.
 pub fn saveVolumes(volumes: *const pequi.audio.Volumes) void {

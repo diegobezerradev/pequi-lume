@@ -15,7 +15,7 @@ atualizado.
 | 1 | Render-to-texture | **fechada** em `00d72eb` | |
 | 2 | Blend multiplicar / máximo | multiplicar **fechado** em `00d72eb`; máximo não | halos mais fracos em enxame grande |
 | 3 | Janela no Linux | **sem contorno** | Linux só headless; desktop = Windows |
-| 4 | Haptics | não | nenhum (a Fase 3 pede "se a engine expuser") |
+| 4 | Haptics | **fechada** em `38c6c78` | |
 | 5 | Toques no Win32 | não | mouse; botão direito e Espaço para apagar |
 | 6 | Roteiro headless só com um dedo | **fechada** em `00d72eb` | |
 | 7 | Densidade da tela (dp) | **fechada** em `252ae7b` | |
@@ -62,6 +62,10 @@ enfraquecendo os halos. Abaixo, o registro original.
   (testes, `check-render`, `shots`), que é como eu jogo e verifico aqui.
 
 ## 4. Haptics
+
+**Fechada em `38c6c78`:** `PlatformApi.vibrate(ms, força)`, por JNI na
+thread do jogo, conferida numa JVM (`zig build check-jni` na engine).
+Abaixo, o registro original.
 
 - **Falta:** nada na `PlatformApi` vibra o aparelho.
 - **API mínima:** `PlatformApi.vibrate(milliseconds: u32, strength: f32)`,
