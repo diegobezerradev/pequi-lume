@@ -1,8 +1,14 @@
 # Lacunas do Pequi encontradas pelo Lume
 
-O jogo não mexe na engine. Cada lacuna diz o que falta, por que importa, a
-API mínima proposta, o esforço estimado e o contorno do lado do jogo.
-Nenhuma bloqueia o jogo; a 3 deixa uma plataforma do pedido de fora.
+Cada lacuna diz o que falta, por que importa, a API mínima proposta, o
+esforço estimado e o contorno do lado do jogo. Nenhuma bloqueia o jogo; a
+3 deixa uma plataforma do pedido de fora.
+
+**Decisão (10/11/2026):** o Diego liberou mudar o `pequi` no que o jogo
+precisar. Entram na engine as lacunas 1, 2, 6, 7 e 4 (nessa ordem, ver
+`PLAN.md`); a 3 e a 5 ficam como estão. Quando uma lacuna for fechada,
+ela ganha aqui a linha "Fechada em `<commit>`" e o `ENGINE_NOTES.md` é
+atualizado.
 
 | # | Lacuna | Bloqueia? | Contorno |
 | --- | --- | --- | --- |

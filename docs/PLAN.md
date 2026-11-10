@@ -7,7 +7,8 @@
 | Tela | 540 de largura, `expand_height`, aspecto de 9:22 a 4:5; fora disso, barras |
 | Mundo | maior que a tela, câmera 2D (`setCamera`), y para baixo; fases de 2 a 4 telas de altura |
 | Passo | simulação a 120 Hz fixos com acumulador; `Rng` própria com a semente da fase |
-| Luz | véu preto com um furo no enxame + brilho aditivo (sem render-to-texture) |
+| Luz | mapa de luz numa textura (todas as fontes somadas), multiplicado sobre a cena; brilho aditivo por cima |
+| Engine | o Diego liberou mexer no `pequi` no que o jogo precisar (10/11/2026); a lista está na "Fase 0.5" |
 | Input | `Controls` único: guiar, pulsar (toque curto), apagar (2 dedos / botão direito / Espaço) |
 | Fases | tabela em Zig (`levels.zig`): tamanho, objetos, N do cupinzeiro, estrelas, vento |
 | Arte | Fase 1 toda em código (texturas geradas); silhuetas finais em SVG próprio, como no Safra |
@@ -35,11 +36,27 @@ src/
 A simulação não importa nada de render nem de áudio: devolve eventos
 (resgatou, perdeu, pulsou, sapo inflou, acendeu) que a tela e o som leem.
 
+## Fase 0.5: mudanças na engine
+
+Só o que o Lume precisa, cada uma geral (serve a qualquer jogo), com teste
+e README no `pequi`. Detalhes em `ENGINE_GAPS.md`.
+
+| # | Mudança | Quando | Por quê |
+| --- | --- | --- | --- |
+| 1 | Render-to-texture (`beginTarget` / `endTarget`) | antes da Fase 1 | o mapa de luz: a luz é o jogo |
+| 2 | Blend `.multiply` | antes da Fase 1 | aplicar o mapa de luz sobre a cena |
+| 6 | Roteiro headless: segundo dedo, botão direito, teclas | antes da Fase 1 | jogar e verificar o apagar sem janela |
+| 7 | `Input.pixels_per_dp` | Fase 2 | alvos de toque de 48dp de verdade |
+| 4 | `PlatformApi.vibrate` | Fase 3 | haptics no pulso, na perda e na vitória |
+
+Ficam de fora: janela no Linux (3, combinado com o Diego) e toques no
+Win32 (5, o mouse resolve).
+
 ## Fase 1: fatia vertical
 
 1. Esqueleto do repositório (build, CI, Android) e tela preta rodando.
 2. Líder + boids em arrays fixos (200), com testes de contagem e determinismo.
-3. Luz: céu, silhuetas de teste, véu com furo, halos aditivos.
+3. Luz: céu, silhuetas de teste, mapa de luz multiplicado, halos aditivos.
 4. Pulsar e apagar, com custo e ganho: o pulso chama perdidos e acorda o
    sapo; apagado, o sapo perde o rastro e o enxame anda devagar.
 5. Perdidos piscando, um sapo com lagoa, um cupinzeiro com N; vitória,
@@ -65,13 +82,14 @@ roteiro); relatório com tempos de frame.
 
 Cascata do cupinzeiro, hit-stop e rastro na perda, antecipação da coruja e
 do sapo, câmera que antecipa e abre com o enxame. Tudo listado em
-`docs/FEEL.md`. Haptics fica de fora (lacuna 4).
+`docs/FEEL.md`. Haptics no Android, com a mudança 4 da engine.
 
 ## Riscos
 
 | Risco | Como eu trato |
 | --- | --- |
-| Um furo só no véu pode parecer pobre | testar cedo na Fase 1; se não convencer, eu paro e proponho render-to-texture na engine |
+| Render-to-texture falhar em algum GPU (GLES 3.0) | testado em GL 3.3 e GLES 3.0 no headless e no Android simulado; se o alvo não puder ser criado, a engine avisa e o jogo cai no véu com um furo |
+| Haptics e dp só se confirmam em aparelho | eu testo no Android simulado; a confirmação final é sua no celular |
 | Tempo de frame medido aqui é com GL por software | reporto o tempo de CPU do jogo (`debug.timed`); o número de GPU real vem do seu PC e do celular |
 | "Divertido" não se mede por robô | o robô acha números quebrados; o julgamento final é seu no aparelho |
 | Dois dedos para apagar pode atrapalhar o arrasto | o primeiro dedo continua guiando; se ficar ruim no aparelho, viro um botão na tela |
