@@ -9,7 +9,7 @@ const tune = sim.tune;
 
 /// An empty field with a swarm of `count` around (x, y).
 fn field(count: u32, x: f32, y: f32) Sim {
-    var s: Sim = .{ .width = 4000, .height = 4000, .mound_x = 3900, .mound_y = 3900, .need = 5, .random = 77 };
+    var s: Sim = .{ .width = 4000, .height = 4000, .mound_x = 3900, .mound_y = 3900, .need = 1, .random = 77 };
     for (0..count) |i| {
         const a = @as(f32, @floatFromInt(i)) * 2.4;
         const r: f32 = if (i == 0) 0 else 10 + @as(f32, @floatFromInt(i % 7)) * 4;
@@ -199,6 +199,7 @@ test "frog: a pulse wakes it and it reaches farther" {
 
 test "losing: the leader goes last, and then the level is lost" {
     var s = field(2, 500, 500);
+    s.need = 1;
     addFrog(&s, 540, 500);
     var e: sim.Events = .{};
     run(&s, tune.frog_windup + 0.2, .{}, &e);
@@ -215,8 +216,26 @@ test "losing: the leader goes last, and then the level is lost" {
     try testing.expectEqual(sum, s.checksum());
 }
 
+test "losing: when the fireflies left in the level cannot light the mound" {
+    var s = field(4, 500, 500);
+    s.need = 6;
+    s.addFly(.lost, 3000, 3000);
+    s.addFly(.lost, 3000, 3050);
+    addFrog(&s, 540, 500);
+    var e: sim.Events = .{};
+    // Six in the level, six needed: still possible.
+    s.step(.{}, &e);
+    try testing.expectEqual(sim.Outcome.playing, s.outcome);
+    // The frog takes one: five can never be six.
+    run(&s, 1.5, .{}, &e);
+    try testing.expectEqual(sim.Outcome.lost, s.outcome);
+    try testing.expect(s.swarm > 0);
+}
+
 test "winning: the mound lights with enough fireflies, shining, and not before" {
     var few = field(4, 500, 500);
+    few.need = 5;
+    few.addFly(.lost, 3000, 3000);
     few.mound_x = 520;
     few.mound_y = 500;
     var e: sim.Events = .{};
@@ -226,6 +245,7 @@ test "winning: the mound lights with enough fireflies, shining, and not before" 
     try testing.expectEqual(@as(u32, 1), e.items[0].value);
 
     var dark = field(6, 500, 500);
+    dark.need = 5;
     dark.mound_x = 520;
     dark.mound_y = 500;
     var e2: sim.Events = .{};
@@ -291,6 +311,168 @@ test "200 fireflies fit and stay together" {
     run(&s, 5, .{ .guiding = true, .target_x = 2600, .target_y = 2300 }, &e);
     try testing.expectEqual(@as(u32, sim.max_flies), s.swarm);
     try testing.expectApproxEqAbs(sim.lightRadius(200, 1), s.lightRadiusNow(), 0.01);
+}
+
+fn addWeb(s: *Sim, x: f32, y: f32) void {
+    s.webs[s.web_count] = .{ .x = x, .y = y, .r = 70 };
+    s.web_count += 1;
+}
+
+fn addOwl(s: *Sim, x: f32, y: f32) void {
+    // A tiny round: as good as hovering in place.
+    s.owls[s.owl_count] = .{ .cx = x, .cy = y, .rx = 1, .ry = 1, .period = 20, .x = x, .y = y };
+    s.owl_count += 1;
+}
+
+test "web: catches fireflies of the swarm, never the leader, and slows it" {
+    var s = field(8, 500, 500);
+    addWeb(&s, 700, 500);
+    var e: sim.Events = .{};
+    run(&s, 2.5, .{ .guiding = true, .target_x = 700, .target_y = 500 }, &e);
+    try testing.expect(e.has(.stuck));
+    try testing.expect(s.webs[0].stuck > 0);
+    try testing.expectEqual(sim.FlyState.swarm, s.flies[sim.leader].state);
+    try testing.expectEqual(countState(&s, .swarm), s.swarm);
+    try testing.expectEqual(countState(&s, .stuck), s.webs[0].stuck);
+    // Without the web the leader would be past it by now.
+    var free = field(8, 500, 500);
+    run(&free, 2.5, .{ .guiding = true, .target_x = 900, .target_y = 500 }, &e);
+    var held = field(8, 500, 500);
+    addWeb(&held, 700, 500);
+    run(&held, 2.5, .{ .guiding = true, .target_x = 900, .target_y = 500 }, &e);
+    try testing.expect(held.flies[0].x < free.flies[0].x - 20);
+}
+
+test "web: the spider eats one at a time; a pulse nearby frees the rest" {
+    var s = field(8, 500, 500);
+    addWeb(&s, 700, 500);
+    var e: sim.Events = .{};
+    run(&s, 2.5, .{ .guiding = true, .target_x = 700, .target_y = 500 }, &e);
+    // Back off, out of the web but close enough for the pulse.
+    run(&s, 1.2, .{ .guiding = true, .target_x = 540, .target_y = 500 }, &e);
+    const stuck = s.webs[0].stuck;
+    try testing.expect(stuck >= 2);
+    e.count = 0;
+    run(&s, tune.web_eat_seconds, .{}, &e);
+    try testing.expect(e.has(.taken));
+    try testing.expectEqual(stuck - 1, s.webs[0].stuck);
+
+    const before = s.swarm;
+    e.count = 0;
+    s.step(.{ .pulse = true }, &e);
+    try testing.expect(e.has(.freed));
+    try testing.expectEqual(@as(u32, 0), s.webs[0].stuck);
+    try testing.expect(s.webs[0].seen > 0 and s.webs[0].torn > 0);
+    run(&s, 4, .{}, &e);
+    try testing.expectEqual(before + stuck - 1, s.swarm);
+}
+
+test "web: a pulse too far away frees no one" {
+    var s = field(8, 500, 500);
+    addWeb(&s, 700, 500);
+    var e: sim.Events = .{};
+    run(&s, 2.5, .{ .guiding = true, .target_x = 700, .target_y = 500 }, &e);
+    run(&s, 2.2, .{ .guiding = true, .target_x = 700 - tune.web_free_radius - 80, .target_y = 500 }, &e);
+    const stuck = s.webs[0].stuck;
+    e.count = 0;
+    s.step(.{ .pulse = true }, &e);
+    try testing.expect(!e.has(.freed));
+    try testing.expectEqual(stuck, s.webs[0].stuck);
+}
+
+test "owl: dives at a shining swarm that stays, and takes up to three" {
+    var s = field(10, 500, 500);
+    addOwl(&s, 500 + tune.owl_sight - 60, 500);
+    var e: sim.Events = .{};
+    s.step(.{}, &e);
+    try testing.expect(e.has(.owl_dive));
+    run(&s, tune.owl_windup + 0.1, .{}, &e);
+    try testing.expectEqual(@as(u32, 10 - tune.owl_takes), s.swarm);
+    // Then it climbs back before it can dive again.
+    run(&s, tune.owl_cooldown * 0.8, .{}, &e);
+    try testing.expectEqual(@as(u32, 10 - tune.owl_takes), s.swarm);
+}
+
+test "owl: flying away once the dive is set, or going dark, makes it miss" {
+    var runner = field(10, 500, 500);
+    addOwl(&runner, 800, 500);
+    var e: sim.Events = .{};
+    run(&runner, tune.owl_windup * tune.owl_track, .{}, &e);
+    run(&runner, tune.owl_windup, .{ .guiding = true, .target_x = 500, .target_y = 2000 }, &e);
+    // The leader gets away; at most a straggler at the tail is caught.
+    try testing.expect(runner.swarm >= 8);
+
+    var hider = field(10, 500, 500);
+    addOwl(&hider, 800, 500);
+    var e2: sim.Events = .{};
+    run(&hider, 0.3, .{}, &e2);
+    run(&hider, tune.owl_windup, .{ .dark = true }, &e2);
+    try testing.expect(e2.has(.owl_miss));
+    try testing.expectEqual(@as(u32, 10), hider.swarm);
+}
+
+test "owl: does not see a dark swarm, but turns to a pulse from far away" {
+    var s = field(10, 500, 500);
+    addOwl(&s, 500 + tune.owl_sight + 200, 500);
+    var e: sim.Events = .{};
+    run(&s, 3, .{}, &e);
+    try testing.expect(!e.has(.owl_dive));
+    s.step(.{ .pulse = true }, &e);
+    try testing.expect(e.has(.owl_dive));
+
+    var dark = field(10, 500, 500);
+    addOwl(&dark, 600, 500);
+    var e2: sim.Events = .{};
+    // Dark from the first step: there is a short glow left, so allow a miss.
+    run(&dark, 6, .{ .dark = true }, &e2);
+    try testing.expectEqual(@as(u32, 10), dark.swarm);
+}
+
+test "wind: gusts come and go, and carry the swarm downwind" {
+    var s = field(20, 1000, 1000);
+    s.wind = .{ .dx = 1, .dy = 0, .strength = 650, .period = 10, .gust = 4 };
+    var e: sim.Events = .{};
+    run(&s, 2, .{}, &e);
+    try testing.expect(s.wind_x > 300);
+    var cx: f32 = 0;
+    for (s.flies[1..s.fly_count]) |f| cx += f.x;
+    cx /= @floatFromInt(s.fly_count - 1);
+    try testing.expect(cx > s.flies[0].x + 10);
+    try testing.expect(s.flies[0].x > 1000);
+    run(&s, 4, .{}, &e);
+    try testing.expectEqual(@as(f32, 0), s.wind_x);
+    run(&s, 4.5, .{}, &e);
+    try testing.expect(e.has(.gust));
+    // Shining, the swarm holds together through it.
+    try testing.expectEqual(@as(u32, 20), s.swarm);
+}
+
+test "wind: a dark swarm is scattered by a gust" {
+    var s = field(20, 1000, 1000);
+    s.wind = .{ .dx = 1, .dy = 0, .strength = 650, .period = 10, .gust = 4 };
+    var e: sim.Events = .{};
+    run(&s, 4.5, .{ .dark = true }, &e);
+    try testing.expect(e.has(.strayed));
+    try testing.expect(s.swarm < 20);
+}
+
+test "maned wolf: predators near its path hide, and webs let go" {
+    var s = field(6, 500, 500);
+    addFrog(&s, 560, 500);
+    addOwl(&s, 700, 500);
+    s.wolf_path = .{ .x0 = 300, .y0 = 600, .x1 = 900, .y1 = 600, .first = 0.05, .period = 100 };
+    var e: sim.Events = .{};
+    run(&s, 5, .{}, &e);
+    try testing.expect(e.has(.wolf));
+    try testing.expect(s.wolf.active);
+    // The frog had time for one strike at most before the wolf came close.
+    try testing.expect(s.swarm >= 5);
+    try testing.expect(s.frogs[0].scared > 0);
+    try testing.expect(!e.has(.owl_dive) or s.owls[0].scared > 0);
+    // It leaves, and the night is dangerous again.
+    run(&s, 30, .{ .dark = true }, &e);
+    try testing.expect(!s.wolf.active);
+    try testing.expectEqual(@as(f32, 0), s.frogs[0].scared);
 }
 
 test "blink patterns stay between 0 and 1" {

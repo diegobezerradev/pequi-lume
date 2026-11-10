@@ -20,7 +20,7 @@ pub fn main() void {
     std.debug.print("level  robot     outcome  time  swarm  stars  taken strayed pulses rescued\n", .{});
     for (lume.levels.all, 0..) |level, index| {
         for (runs) |run| {
-            const robot: lume.robot.Robot = .{ .careful = run.careful, .goal = if (run.greedy) level.stars[2] else 0 };
+            var robot: lume.robot.Robot = .{ .careful = run.careful, .goal = if (run.greedy) level.stars[2] else 0 };
             var s = sim.Sim.init(@intCast(index));
             var counts: [@typeInfo(sim.EventKind).@"enum".field_names.len]u32 = @splat(0);
             var events: sim.Events = .{};

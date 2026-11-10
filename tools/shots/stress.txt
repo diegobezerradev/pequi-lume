@@ -1,14 +1,16 @@
-# 200 fireflies (the I key, in debug builds), flying around: the frame's cost
-# is logged every 300 frames.
-hold 10 action_up 1
-drag 30 270 480 420 300 200
-drag 240 420 300 120 300 200
-drag 450 120 300 270 200 300
-shot 200 swarm_a.ppm
-shot 700 swarm_b.ppm
-tap 800 270 480
-shot 815 swarm_pulse.ppm
-finger2 900 100 100 200
-drag 890 270 480 270 300 300
-shot 1050 swarm_dark.ppm
-shot 1400 swarm_c.ppm
+# 200 fireflies (the I key, in debug builds), flying around level 3: the
+# frame's cost is logged every 300 frames.
+tap 20 270 730
+hold 40 start 1
+tap 60 329 200
+hold 110 action_up 1
+drag 130 270 480 420 300 200
+drag 340 420 300 120 300 200
+drag 550 120 300 270 200 300
+shot 300 swarm_a.ppm
+tap 900 270 480
+shot 915 swarm_pulse.ppm
+finger2 1000 100 100 200
+drag 990 270 480 270 300 300
+shot 1150 swarm_dark.ppm
+shot 1500 swarm_c.ppm

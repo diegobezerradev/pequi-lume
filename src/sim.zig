@@ -13,6 +13,8 @@ pub const dt: f32 = 1.0 / 120.0;
 
 pub const max_flies = 200;
 pub const max_frogs = 8;
+pub const max_webs = 12;
+pub const max_owls = 4;
 
 /// The numbers the game is tuned with.
 pub const tune = struct {
@@ -43,6 +45,34 @@ pub const tune = struct {
     /// The swarm is seen while its glow is above this.
     pub const seen_glow: f32 = 0.35;
 
+    /// A web holds at most this many.
+    pub const web_capacity: u32 = 6;
+    /// A pulse this close to a web tears it and frees who is in it.
+    pub const web_free_radius: f32 = 230;
+    /// Seconds between the spider's meals while it has someone trapped.
+    pub const web_eat_seconds: f32 = 3.5;
+    /// A torn web catches no one for this long.
+    pub const web_torn_seconds: f32 = 6;
+    /// A pulse shows the webs around for this long.
+    pub const web_seen_seconds: f32 = 5;
+    pub const web_slow: f32 = 0.55;
+
+    /// The owl sees a shining swarm this far from where it flies.
+    pub const owl_sight: f32 = 430;
+    /// And turns to a pulse from this far.
+    pub const owl_hearing: f32 = 850;
+    pub const owl_windup: f32 = 1.6;
+    /// The dive follows the swarm for this part of the windup, then is set.
+    pub const owl_track: f32 = 0.45;
+    pub const owl_strike_radius: f32 = 58;
+    pub const owl_takes: u32 = 3;
+    pub const owl_cooldown: f32 = 4.5;
+
+    pub const wolf_speed: f32 = 85;
+    /// Predators this close to the maned wolf hide for a while.
+    pub const wolf_scare_radius: f32 = 280;
+    pub const scared_seconds: f32 = 6;
+
     pub const mound_radius: f32 = 85;
 };
 
@@ -63,7 +93,7 @@ pub const Controls = struct {
     dark: bool = false,
 };
 
-pub const FlyState = enum(u8) { none, lost, called, swarm, taken };
+pub const FlyState = enum(u8) { none, lost, called, swarm, taken, stuck };
 
 pub const Fly = struct {
     x: f32 = 0,
@@ -80,6 +110,8 @@ pub const Fly = struct {
     pattern: u8 = 0,
     /// Called: seconds left before it gives up.
     timer: f32 = 0,
+    /// Stuck: in which web.
+    web: u8 = 0,
 };
 
 pub const FrogState = enum(u8) { idle, windup, strike, cooldown };
@@ -95,6 +127,55 @@ pub const Frog = struct {
     tongue_x: f32 = 0,
     tongue_y: f32 = 0,
     hit: bool = false,
+    /// Seconds it stays hidden after the maned wolf passed.
+    scared: f32 = 0,
+};
+
+pub const Web = struct {
+    x: f32,
+    y: f32,
+    r: f32,
+    /// Fireflies trapped in it now.
+    stuck: u32 = 0,
+    /// Seconds until the spider eats again.
+    eat: f32 = 0,
+    /// Seconds it stays torn, catching no one.
+    torn: f32 = 0,
+    /// Seconds it stays visible after a pulse.
+    seen: f32 = 0,
+    scared: f32 = 0,
+};
+
+pub const OwlState = enum(u8) { patrol, dive, strike, climb };
+
+pub const Owl = struct {
+    /// It patrols an ellipse around (cx, cy), one turn every `period` seconds.
+    cx: f32,
+    cy: f32,
+    rx: f32,
+    ry: f32,
+    period: f32,
+    x: f32 = 0,
+    y: f32 = 0,
+    state: OwlState = .patrol,
+    timer: f32 = 0,
+    /// Where it dives: follows the swarm at first, then is set.
+    target_x: f32 = 0,
+    target_y: f32 = 0,
+    /// Where it left the patrol from.
+    from_x: f32 = 0,
+    from_y: f32 = 0,
+    scared: f32 = 0,
+};
+
+/// The maned wolf: no enemy. It crosses the level now and then, and the
+/// predators near its path hide.
+pub const Wolf = struct {
+    active: bool = false,
+    x: f32 = 0,
+    y: f32 = 0,
+    /// Along its path, 0 to 1.
+    t: f32 = 0,
 };
 
 pub const Outcome = enum(u8) { playing, won, lost };
@@ -113,6 +194,17 @@ pub const EventKind = enum(u8) {
     dark_off,
     frog_windup,
     frog_miss,
+    /// A swarm firefly flew into a web.
+    stuck,
+    /// A pulse (or the wolf) freed the ones in a web; `value` is how many.
+    freed,
+    /// The owl starts its dive.
+    owl_dive,
+    owl_miss,
+    /// A gust of wind begins.
+    gust,
+    /// The maned wolf enters the level.
+    wolf,
     /// At the mound with too few; `value` is how many are missing.
     mound_denied,
     won,
@@ -169,6 +261,17 @@ pub const Sim = struct {
     frogs: [max_frogs]Frog = undefined,
     frog_count: u32 = 0,
 
+    webs: [max_webs]Web = undefined,
+    web_count: u32 = 0,
+    owls: [max_owls]Owl = undefined,
+    owl_count: u32 = 0,
+    wolf: Wolf = .{},
+    wolf_path: ?levels.WolfPath = null,
+    wind: ?levels.Wind = null,
+    /// The wind's push right now (0 between gusts).
+    wind_x: f32 = 0,
+    wind_y: f32 = 0,
+
     mound_x: f32 = 0,
     mound_y: f32 = 0,
     need: u32 = 0,
@@ -195,6 +298,8 @@ pub const Sim = struct {
             .mound_x = level.mound[0],
             .mound_y = level.mound[1],
             .need = level.need,
+            .wind = level.wind,
+            .wolf_path = level.wolf,
         };
         for (0..level.start_swarm) |i| {
             const a = s.rand() * std.math.tau;
@@ -215,6 +320,16 @@ pub const Sim = struct {
                 .y = pond.y + @sin(pond.frog_angle) * pond.ry,
             };
             s.frog_count += 1;
+        }
+        for (level.webs) |web| {
+            if (s.web_count == max_webs) break;
+            s.webs[s.web_count] = .{ .x = web.x, .y = web.y, .r = web.r };
+            s.web_count += 1;
+        }
+        for (level.owls) |owl| {
+            if (s.owl_count == max_owls) break;
+            s.owls[s.owl_count] = .{ .cx = owl.x, .cy = owl.y, .rx = owl.rx, .ry = owl.ry, .period = owl.period, .x = owl.x + owl.rx, .y = owl.y };
+            s.owl_count += 1;
         }
         return s;
     }
@@ -284,10 +399,14 @@ pub const Sim = struct {
         }
         if (controls.pulse) s.pulse(events);
 
+        predators.updateWind(s, events);
         boids.moveLeader(s, controls);
         boids.moveSwarm(s, events);
         boids.moveLost(s, events);
+        predators.updateWolf(s, events);
         predators.updateFrogs(s, events);
+        predators.updateWebs(s, events);
+        predators.updateOwls(s, events);
         s.checkEnd(events);
     }
 
@@ -308,7 +427,7 @@ pub const Sim = struct {
             f.state = .called;
             f.timer = tune.called_seconds;
         }
-        predators.hearPulse(s, me.x, me.y);
+        predators.hearPulse(s, me.x, me.y, events);
     }
 
     /// A lost or called firefly joins the swarm.
@@ -349,6 +468,19 @@ pub const Sim = struct {
             events.add(.{ .kind = .lost, .x = me.x, .y = me.y });
             return;
         }
+        // With too few fireflies left in the whole level, the mound can
+        // never be lit: the level is lost, not left hanging.
+        if (s.steps % 60 == 0) {
+            var alive: u32 = 0;
+            for (s.flies[0..s.fly_count]) |f| {
+                if (f.state != .none and f.state != .taken) alive += 1;
+            }
+            if (alive < s.need) {
+                s.outcome = .lost;
+                events.add(.{ .kind = .lost, .x = me.x, .y = me.y });
+                return;
+            }
+        }
         if (s.dark or distance(me.x, me.y, s.mound_x, s.mound_y) > tune.mound_radius) return;
         if (s.swarm >= s.need) {
             s.outcome = .won;
@@ -387,6 +519,15 @@ pub const Sim = struct {
             h.update(std.mem.asBytes(&f.state));
             h.update(std.mem.asBytes(&f.timer));
         }
+        for (s.webs[0..s.web_count]) |w| {
+            h.update(std.mem.asBytes(&w.stuck));
+            h.update(std.mem.asBytes(&w.eat));
+        }
+        for (s.owls[0..s.owl_count]) |o| {
+            h.update(std.mem.asBytes(&o.x));
+            h.update(std.mem.asBytes(&o.state));
+        }
+        h.update(std.mem.asBytes(&s.wolf.t));
         return h.final();
     }
 };

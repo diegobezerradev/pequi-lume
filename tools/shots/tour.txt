@@ -1,0 +1,13 @@
+# The screens around the levels: title, settings, map, and into level 1.
+shot 40 title.ppm
+tap 50 270 820
+shot 80 settings.ppm
+back 90
+tap 110 270 730
+shot 140 map.ppm
+hold 150 start 1
+shot 170 map_open.ppm
+tap 180 93 200
+shot 260 level1.ppm
+back 300
+shot 330 pause.ppm

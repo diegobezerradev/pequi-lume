@@ -1,0 +1,4 @@
+# Lume's asset pack. Pictures and sounds are made in code (src/art.zig,
+# src/sfx.zig); the only file here is the font Bitter (SIL OFL 1.1,
+# data/OFL-Bitter.txt).
+font     ui            Bitter-800.ttf           44

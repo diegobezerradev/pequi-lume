@@ -6,34 +6,49 @@ Nacional das Emas. Feito na engine
 [Pequi](https://github.com/diegobezerradev/pequi) (Zig), para Android e PC
 (Windows).
 
-| | | | |
-| --- | --- | --- | --- |
-| ![Início](art/screens/inicio.png) | ![Pulso](art/screens/pulso.png) | ![Sapo](art/screens/sapo.png) | ![Aceso](art/screens/aceso.png) |
+| | | |
+| --- | --- | --- |
+| ![Título](art/screens/titulo.png) | ![Mapa](art/screens/mapa.png) | ![Pulso](art/screens/pulso.png) |
+| ![Teias](art/screens/teias.png) | ![Chapada](art/screens/chapada.png) | ![Aceso](art/screens/aceso.png) |
 
 ## Estado
 
-**Fase 1 (fatia vertical):** uma fase jogável do começo ao fim, com arte e
-sons provisórios feitos em código. O plano das próximas fases está em
-`docs/PLAN.md`.
+**Fase 2 (jogo completo):** 12 fases em três regiões, com título, mapa,
+pausa, ajustes e progresso salvo. A arte e os sons são feitos em código;
+o polimento de game feel é a Fase 3 (`docs/PLAN.md`).
 
 ## Como se joga
 
 | Ação | Toque | PC | O que faz |
 | --- | --- | --- | --- |
 | Guiar | arrastar | botão esquerdo | o líder voa para onde você aponta; o enxame vai atrás |
-| Pulsar | toque rápido | clique | um clarão mostra o mapa e chama os perdidos de longe, mas acorda os predadores |
+| Pulsar | toque rápido | clique | um clarão mostra o mapa, chama os perdidos de longe e rasga as teias por perto, mas acorda os predadores |
 | Apagar | segurar dois dedos | botão direito ou Espaço | o enxame some no escuro: ninguém o vê, mas ele anda devagar, não resgata e se espalha |
 
 - O tamanho do enxame é a sua vida e o alcance da sua luz.
 - Vaga-lumes perdidos piscam pelo mapa; a luz do enxame os traz de volta.
-- **Sapo:** fica na beira da lagoa. Incha e coaxa antes de dar o bote em
-  quem brilha por perto. Não enxerga um enxame apagado. Um pulso por perto
-  o acorda: por alguns segundos alcança mais longe e ataca mais rápido.
 - O cupinzeiro acende com o número de vaga-lumes que ele pede. Quantos
   chegaram vale de uma a três estrelas.
+- Se os vaga-lumes que restam na fase não bastam para o cupinzeiro, a fase
+  acaba ali.
 
-Em builds Debug e ReleaseSafe: Enter liga um robô que joga sozinho; a tecla
-I enche o enxame para medir o custo do frame.
+| Quem | Regra | Como escapar |
+| --- | --- | --- |
+| Sapo | na beira da lagoa; incha e coaxa meio segundo antes de pegar quem brilha por perto. Um pulso o acorda: alcança mais longe e ataca mais rápido | apagar enquanto ele incha, ou passar longe |
+| Aranha | a teia não se vê, só depois de um pulso. Quem voa nela fica preso, e a aranha come um a cada poucos segundos | pulsar perto da teia: ela rasga e solta todos |
+| Coruja | faz a ronda lá do alto; mergulha num enxame aceso que ela veja, ou num pulso de muito longe. A sombra segue o enxame até a metade do mergulho e então para | sair da sombra depois que ela para, ou apagar |
+| Lobo-guará | não é inimigo: atravessa a fase de vez em quando, e sapos, aranhas e corujas perto dele se escondem | |
+| Vento | na Chapada, rajadas empurram o enxame; no escuro, espalham | ficar aceso durante a rajada |
+
+| Região | Fases | O que chega |
+| --- | --- | --- |
+| Vereda | 1 a 4 | lagoas e sapos; a 1 ensina os gestos; o lobo-guará aparece na 4 |
+| Campo Sujo | 5 a 8 | teias e aranhas, junto com os sapos |
+| Chapada | 9 a 12 | corujas, e vento a partir da 10; a 12 tem tudo |
+
+Em builds Debug e ReleaseSafe: Enter liga um robô que joga sozinho (no
+mapa, abre todas as fases); a tecla I enche o enxame para medir o custo do
+frame.
 
 ## Requisitos e comandos
 
@@ -42,7 +57,8 @@ Zig **0.17.0** e o repositório `pequi` clonado ao lado deste.
 ```sh
 zig build run                       # o jogo (no Windows)
 zig build -Dtarget=x86_64-windows   # compila para Windows de outro sistema
-zig build test                      # testes: simulação, predadores, robô, input
+zig build test                      # testes: simulação, predadores, robô, input, progresso
+python3 tools/levels.py --maps      # refaz a tabela das fases e desenha os mapas (Pillow)
 zig build robots                    # os robôs jogam cada fase e mostram o resultado
 zig build check-render              # Linux: renderiza sem janela (GL e GLES)
 zig build shots                     # Linux: roteiros em tools/shots/, capturas em zig-out/shots/
@@ -58,16 +74,23 @@ leitura em `diegobezerradev/pequi`.
 
 ```
 src/
-  sim.zig        a fase: estado, passo fixo de 1/120 s, eventos
-  boids.zig      o líder, o enxame (separação, alinhamento, coesão), os perdidos
-  predators.zig  o sapo
-  levels.zig     as fases, como dados
-  robot.zig      um robô que joga pelos mesmos controles do jogador
-  input.zig      mouse, dedos e teclas viram um só ponteiro
-  game.zig       a fase na tela: câmera, luz, desenho, HUD, reação aos eventos
-  art.zig        as texturas, geradas em código
-  sfx.zig        os sons, gerados em código
-  main.zig       memória, áudio, laço do frame
+  sim.zig          a fase: estado, passo fixo de 1/120 s, eventos
+  boids.zig        o líder, o enxame (separação, alinhamento, coesão), os perdidos
+  predators.zig    sapo, aranha, coruja, lobo-guará e vento
+  levels.zig       o que é uma fase; level_table.zig, as 12 (gerada por tools/levels.py)
+  robot.zig        um robô que joga pelos mesmos controles do jogador
+  input.zig        mouse, dedos e teclas viram um só ponteiro
+  game.zig         a fase na tela: câmera, luz, desenho, HUD, pausa, fim, tutorial
+  screens.zig      título, mapa e ajustes
+  ui.zig           texto e botões do tamanho de um dedo (48dp)
+  progress.zig     as estrelas de cada fase, salvas
+  art.zig          as texturas, geradas em código
+  sfx.zig          os sons, gerados em código
+  main.zig         memória, áudio, telas, laço do frame
+tools/
+  levels.py        desenha as 12 fases a partir de faixas (lagoa, portão, teias, ronda...)
+  robots.zig       os robôs em todas as fases
+  shots/           roteiros para `zig build shots`
 docs/
   ENGINE_NOTES.md  o que o jogo usa da engine
   ENGINE_GAPS.md   o que faltava nela, e o que foi feito
@@ -85,5 +108,6 @@ são multiplicadas por ele e somadas por cima. Só há cor onde há luz.
 
 ## Licenças
 
-Tudo aqui é original e gerado por código (texturas em `src/art.zig`, sons
-em `src/sfx.zig`). Não há assets de terceiros.
+As imagens e os sons são originais e gerados por código (`src/art.zig`,
+`src/sfx.zig`). A única peça de terceiros é a fonte Bitter (SIL Open Font
+License 1.1, `data/OFL-Bitter.txt`).

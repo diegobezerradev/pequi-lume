@@ -14,11 +14,31 @@ pub const Robot = struct {
     goal: u32 = 0,
     /// A careless robot never goes dark and walks straight at things.
     careful: bool = true,
+    /// Webs it has seen (in a pulse, or with someone stuck in them).
+    known: [sim.max_webs]bool = @splat(false),
+    /// Lost fireflies it gave up on, after getting nowhere for a while.
+    given_up: [sim.max_flies]bool = @splat(false),
+    stalled_steps: u32 = 0,
+    last_swarm: u32 = 0,
+    target_fly: usize = 0,
 
-    pub fn think(r: Robot, s: *const Sim) sim.Controls {
+    pub fn think(r: *Robot, s: *const Sim) sim.Controls {
         const me = s.flies[sim.leader];
         var c: sim.Controls = .{ .guiding = true, .target_x = me.x, .target_y = me.y };
         const goal = @max(r.goal, s.need);
+
+        // Ten seconds without the swarm growing: forget this one.
+        if (s.swarm != r.last_swarm) {
+            r.last_swarm = s.swarm;
+            r.stalled_steps = 0;
+        } else {
+            r.stalled_steps += 1;
+            if (r.stalled_steps > 1200 and r.target_fly != 0) {
+                r.given_up[r.target_fly] = true;
+                r.stalled_steps = 0;
+            }
+        }
+        r.target_fly = 0;
 
         // Where to: the mound, or the nearest lost firefly.
         var lost_near: f32 = std.math.floatMax(f32);
@@ -28,14 +48,15 @@ pub const Robot = struct {
             c.target_y = s.mound_y;
         } else {
             var found = false;
-            for (s.flies[1..s.fly_count]) |f| {
+            for (s.flies[1..s.fly_count], 1..) |f, i| {
                 if (f.state == .called) any_called = true;
-                if (f.state != .lost) continue;
+                if (f.state != .lost or r.given_up[i]) continue;
                 const d = sim.distance(f.x, f.y, me.x, me.y);
                 if (d < lost_near) {
                     lost_near = d;
                     c.target_x = f.x;
                     c.target_y = f.y;
+                    r.target_fly = i;
                     found = true;
                 }
             }
@@ -81,6 +102,51 @@ pub const Robot = struct {
             c.target_y = me.y + (ty / td + push_y * 1.6) * 120;
         }
 
+        // Webs: remember the ones seen, keep out of them, and go back with
+        // a pulse for anyone stuck.
+        var rescue = false;
+        for (s.webs[0..s.web_count], 0..) |web, i| {
+            if (web.seen > 0 or web.stuck > 0) r.known[i] = true;
+            if (!r.known[i]) continue;
+            const d = sim.distance(web.x, web.y, me.x, me.y);
+            if (web.stuck > 0) {
+                rescue = true;
+                if (d < tune.web_free_radius - 25) {
+                    if (s.pulse_cooldown == 0 and !c.dark) c.pulse = true;
+                    c.guiding = false;
+                } else {
+                    c.target_x = web.x;
+                    c.target_y = web.y;
+                }
+            } else if (web.torn == 0 and d < web.r + 75 and !rescue) {
+                const w = (web.r + 75 - d) / 60;
+                const tx = c.target_x - me.x;
+                const ty = c.target_y - me.y;
+                const td = @sqrt(tx * tx + ty * ty) + 0.001;
+                // Around it, not just back: the sideways part picks a side.
+                const ox = (me.x - web.x) / (d + 0.001);
+                const oy = (me.y - web.y) / (d + 0.001);
+                const side: f32 = if (tx * -oy + ty * ox >= 0) 1 else -1;
+                c.target_x = me.x + (tx / td + ox * w * 1.5 - oy * side * w) * 120;
+                c.target_y = me.y + (ty / td + oy * w * 1.5 + ox * side * w) * 120;
+            }
+        }
+
+        // An owl diving here: hide, or run if the wind would scatter a dark swarm.
+        for (s.owls[0..s.owl_count]) |owl| {
+            if (owl.state != .dive) continue;
+            const d = sim.distance(owl.target_x, owl.target_y, me.x, me.y);
+            if (d > tune.owl_strike_radius + 110) continue;
+            if (s.wind_x != 0 or s.wind_y != 0) {
+                c.guiding = true;
+                c.target_x = me.x + (me.x - owl.target_x) / (d + 0.001) * 200 + 1;
+                c.target_y = me.y + (me.y - owl.target_y) / (d + 0.001) * 200 + 200;
+            } else {
+                c.dark = true;
+                c.pulse = false;
+            }
+        }
+
         // A pulse brings in the ones it would be risky to fetch, when no
         // frog is close enough to be woken within reach.
         if (s.pulse_cooldown == 0 and !c.dark and s.swarm < goal and
@@ -97,8 +163,9 @@ pub const Robot = struct {
 
 const testing = std.testing;
 
-fn play(robot: Robot, seconds: f32) Sim {
-    var s = Sim.init(0);
+fn play(start: Robot, seconds: f32) Sim {
+    var robot = start;
+    var s = Sim.init(2);
     var events: sim.Events = .{};
     const steps: u32 = @intFromFloat(seconds / sim.dt);
     for (0..steps) |_| {
@@ -109,20 +176,37 @@ fn play(robot: Robot, seconds: f32) Sim {
     return s;
 }
 
-test "a careful robot lights the first mound" {
-    const s = play(.{}, 300);
+test "every level can be won by a careful robot" {
+    const levels = @import("levels.zig");
+    for (0..levels.all.len) |index| {
+        var robot: Robot = .{};
+        var s = Sim.init(@intCast(index));
+        var events: sim.Events = .{};
+        while (s.outcome == .playing and s.time < 400) {
+            events.count = 0;
+            s.step(robot.think(&s), &events);
+        }
+        testing.expectEqual(sim.Outcome.won, s.outcome) catch |err| {
+            std.debug.print("level {d} ({s}): {s} with {d} of {d}\n", .{ index + 1, levels.all[index].name, @tagName(s.outcome), s.swarm, s.need });
+            return err;
+        };
+    }
+}
+
+test "a careful robot lights a mound" {
+    const s = play(.{}, 600);
     try testing.expectEqual(sim.Outcome.won, s.outcome);
     try testing.expect(s.stars() >= 1);
 }
 
 test "a greedy careful robot can get three stars" {
-    const s = play(.{ .goal = @import("levels.zig").get(0).stars[2] }, 400);
+    const s = play(.{ .goal = @import("levels.zig").get(2).stars[2] }, 600);
     try testing.expectEqual(sim.Outcome.won, s.outcome);
     try testing.expectEqual(@as(u32, 3), s.stars());
 }
 
 test "a careless robot pays for it" {
-    const careful = play(.{ .goal = 24 }, 400);
-    const careless = play(.{ .goal = 24, .careful = false }, 400);
+    const careful = play(.{ .goal = 30 }, 600);
+    const careless = play(.{ .goal = 30, .careful = false }, 600);
     try testing.expect(careless.outcome != .won or careless.swarm < careful.swarm);
 }

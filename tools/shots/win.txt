@@ -1,9 +1,0 @@
-# The robot plays the level to the end (Enter turns it on, in debug builds).
-hold 10 start 1
-shot 600 robot_a.ppm
-shot 1500 robot_b.ppm
-shot 2400 robot_c.ppm
-shot 3000 robot_d.ppm
-shot 3600 robot_e.ppm
-shot 4100 robot_f.ppm
-shot 4590 robot_g.ppm

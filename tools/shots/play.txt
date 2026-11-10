@@ -1,13 +1,13 @@
-# A short walk: guide up, rescue, pulse, go dark with two fingers.
-shot 30 start.ppm
-drag 40 270 600 270 300 200
-shot 200 moving.ppm
-tap 330 270 640
-shot 345 pulse.ppm
-shot 420 after_pulse.ppm
+# Level 1 by hand: drag, rescue, pulse, two fingers near the frog.
+tap 20 270 730
+tap 50 93 200
+shot 120 tutorial_drag.ppm
+drag 130 270 600 270 300 200
+shot 340 moving.ppm
+tap 380 270 640
+shot 395 pulse.ppm
 drag 460 270 600 200 320 300
 finger2 600 400 900 160
 shot 700 dark.ppm
-shot 900 lit_again.ppm
 drag 920 270 600 300 300 500
 shot 1200 later.ppm

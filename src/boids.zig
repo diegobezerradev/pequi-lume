@@ -16,10 +16,18 @@ const swarm_speed_dark_slow: f32 = 34;
 const swarm_speed_dark_fast: f32 = 80;
 /// In the dark each firefly only learns where the leader is this often.
 const dark_glimpse_seconds: f32 = 1.3;
+/// How much of the wind's push becomes speed for the leader.
+const leader_wind: f32 = 0.08;
+const follower_wind: f32 = 0.1;
+const follower_wind_dark: f32 = 0.4;
 
 pub fn moveLeader(s: *Sim, controls: sim.Controls) void {
     const me = &s.flies[sim.leader];
-    const top = if (s.dark) tune.leader_speed_dark else tune.leader_speed;
+    var top = if (s.dark) tune.leader_speed_dark else tune.leader_speed;
+    // A web does not hold the leader, but it drags.
+    for (s.webs[0..s.web_count]) |web| {
+        if (web.torn == 0 and sim.distance(me.x, me.y, web.x, web.y) < web.r) top *= tune.web_slow;
+    }
     var want_x: f32 = 0;
     var want_y: f32 = 0;
     if (controls.guiding) {
@@ -37,8 +45,9 @@ pub fn moveLeader(s: *Sim, controls: sim.Controls) void {
     const k = 1 - std.math.exp(-sim.dt / 0.09);
     me.vx += (want_x - me.vx) * k;
     me.vy += (want_y - me.vy) * k;
-    me.x = std.math.clamp(me.x + me.vx * sim.dt, 12, s.width - 12);
-    me.y = std.math.clamp(me.y + me.vy * sim.dt, 12, s.height - 12);
+    // The wind carries it a little too.
+    me.x = std.math.clamp(me.x + (me.vx + s.wind_x * leader_wind) * sim.dt, 12, s.width - 12);
+    me.y = std.math.clamp(me.y + (me.vy + s.wind_y * leader_wind) * sim.dt, 12, s.height - 12);
 }
 
 /// Going dark: every firefly remembers where the leader was.
@@ -104,9 +113,9 @@ pub fn moveSwarm(s: *Sim, events: *sim.Events) void {
         const lx = f.home_x - f.x;
         const ly = f.home_y - f.y;
         const ld = @sqrt(lx * lx + ly * ly) + 0.001;
-        const pull = std.math.clamp((ld - ring) / 40, -0.4, 3.0);
-        ax += lx / ld * pull * 420;
-        ay += ly / ld * pull * 420;
+        const pull = std.math.clamp((ld - ring) / 26, -0.4, 3.0);
+        ax += lx / ld * pull * 850;
+        ay += ly / ld * pull * 850;
         // Apart from the ones too close.
         ax += sep_x * 900;
         ay += sep_y * 900;
@@ -123,6 +132,9 @@ pub fn moveSwarm(s: *Sim, events: *sim.Events) void {
         ax += @cos(s.time * 2.3 + f.phase * 3) * wander + @sin(s.time * 5.1 + f.phase) * wander * 0.5;
         ay += @sin(s.time * 2.9 + f.phase * 2) * wander + @cos(s.time * 4.3 + f.phase * 5) * wander * 0.5;
 
+        ax += s.wind_x;
+        ay += s.wind_y;
+
         f.vx += ax * sim.dt;
         f.vy += ay * sim.dt;
         // Air drag, then the speed limit.
@@ -135,8 +147,11 @@ pub fn moveSwarm(s: *Sim, events: *sim.Events) void {
             f.vx *= top / speed;
             f.vy *= top / speed;
         }
-        f.x = std.math.clamp(f.x + f.vx * sim.dt, 4, s.width - 4);
-        f.y = std.math.clamp(f.y + f.vy * sim.dt, 4, s.height - 4);
+        // The wind carries them whatever their own speed, and much farther
+        // when they cannot see each other to hold together.
+        const carried: f32 = if (s.dark) follower_wind_dark else follower_wind;
+        f.x = std.math.clamp(f.x + (f.vx + s.wind_x * carried) * sim.dt, 4, s.width - 4);
+        f.y = std.math.clamp(f.y + (f.vy + s.wind_y * carried) * sim.dt, 4, s.height - 4);
 
         if (sim.distance(f.x, f.y, me.x, me.y) > tune.stray_radius) {
             f.state = .lost;

@@ -1,11 +1,17 @@
 //! Lume: the library the Pequi platform loads. It owns the memory, the
-//! generated pictures and sounds and the mixer, and runs `game.zig`.
+//! pictures and sounds, the mixer and the player's progress, and moves
+//! between the screens: title, map, settings and the level itself.
 
 const std = @import("std");
 const pequi = @import("pequi");
 const game = @import("game.zig");
+const screens = @import("screens.zig");
+const levels = @import("levels.zig");
 const Art = @import("art.zig").Art;
 const Sounds = @import("sfx.zig").Sounds;
+const Progress = @import("progress.zig").Progress;
+const Reader = @import("input.zig").Reader;
+const Ui = @import("ui.zig").Ui;
 
 comptime {
     pequi.exportGame(@This());
@@ -13,6 +19,8 @@ comptime {
 
 /// A panic in game code goes to the player's log (log.txt) before the game stops.
 pub const panic = pequi.panic;
+
+const Screen = enum { title, map, settings, play };
 
 const App = struct {
     /// Owns this struct and everything the game allocates.
@@ -24,21 +32,46 @@ const App = struct {
     volumes: pequi.audio.Volumes,
     art: Art,
     sounds: Sounds,
+    pack: pequi.assets.Pack,
+    has_pack: bool,
+    font: pequi.render.Font,
+    has_font: bool,
+    progress: Progress,
+
+    screen: Screen,
+    /// Seconds on the menus, for what moves on them.
+    time: f32,
+    reader: Reader,
+    menu: pequi.ui.Ui,
     game: game.Game,
     show_debug: bool,
 };
 
 fn init(memory: *pequi.GameMemory) *App {
+    const api = pequi.platformApi();
     const app = pequi.memory.bootstrap(App, "arena", &memory.platform.block_allocator);
     memory.game_state = app;
     app.layout_size = @sizeOf(App);
     app.mixer = .{};
-    app.volumes = pequi.audio.Volumes.load(pequi.platformApi());
+    app.volumes = pequi.audio.Volumes.load(api);
     app.volumes.apply(&app.mixer);
     app.art = .{};
     app.sounds.init(&app.arena);
+    app.has_font = false;
+    app.has_pack = false;
+    if (pequi.assets.Pack.open(&app.arena, api, "lume.pqa")) |pack| {
+        app.pack = pack;
+        app.has_pack = true;
+    } else |err| {
+        pequi.log("lume: asset pack: {s} (using the built-in font)", .{@errorName(err)});
+    }
+    app.progress = Progress.load(api);
+    app.screen = .title;
+    app.time = 0;
+    app.reader = .{};
+    app.menu = .{};
     app.game.robot_on = false;
-    app.game.start(0);
+    app.game.start(app.progress.next());
     return app;
 }
 
@@ -49,6 +82,7 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
         app.arena.clear();
         app = init(memory);
     }
+    const api = pequi.platformApi();
     // Portrait: 540 wide, as tall as the screen's shape allows.
     memory.display.width = 540;
     memory.display.height = 960;
@@ -56,24 +90,83 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
     memory.display.min_aspect = 9.0 / 22.0;
     memory.display.max_aspect = 4.0 / 5.0;
 
-    if (memory.gpu_resources_lost) app.art.uploaded = false;
+    if (memory.gpu_resources_lost) {
+        app.art.uploaded = false;
+        app.has_font = false;
+    }
     if (!app.art.uploaded) app.art.upload(render);
+    if (app.has_pack and !app.has_font) {
+        if (app.pack.loadFont(api, &app.arena, render, &app.art.textures, "ui")) |font| {
+            app.font = font;
+            app.has_font = true;
+        } else |err| {
+            if (err != error.NoRoomThisFrame) {
+                pequi.log("lume: font: {s}", .{@errorName(err)});
+                app.has_pack = false;
+            }
+        }
+    }
+    const font: ?*const pequi.render.Font = if (app.has_font) &app.font else null;
 
-    app.sounds.ambience(&app.mixer);
-    var frame: game.Frame = .{
-        .input = input,
-        .render = render,
-        .art = &app.art,
-        .sounds = &app.sounds,
-        .mixer = &app.mixer,
-    };
-    app.game.update(&frame);
+    if (app.screen == .play) {
+        const index = app.game.sim.level_index;
+        const frame: game.Frame = .{
+            .input = input,
+            .render = render,
+            .art = &app.art,
+            .sounds = &app.sounds,
+            .mixer = &app.mixer,
+            .volumes = &app.volumes,
+            .font = font,
+            .fullscreen = &memory.display.fullscreen,
+            .best_stars = app.progress.stars[index],
+            .is_last_level = index + 1 >= levels.all.len,
+        };
+        switch (app.game.update(&frame)) {
+            .none => {},
+            .won => {
+                if (app.progress.record(index, app.game.sim.stars())) app.progress.save(api);
+            },
+            .map => goTo(app, .map),
+            .next => app.game.start(index + 1),
+        }
+    } else {
+        app.time += input.dt;
+        // The menus keep the night's sound, quieter.
+        app.sounds.ambience(&app.mixer, .{ 0.35, 0.2, 0.03 });
+        app.sounds.update(&app.mixer, input.dt);
+        const ui = Ui.init(input, render, &app.art, font, app.reader.read(input));
+        const action: screens.Action = switch (app.screen) {
+            .title => screens.title(&ui, input, app.time),
+            .map => screens.map(&ui, input, app.time, &app.progress),
+            .settings => screens.settings(&ui, &app.menu, input, app.time, &app.volumes, &app.mixer, &memory.display.fullscreen, font),
+            .play => unreachable,
+        };
+        switch (action) {
+            .none => {},
+            .title => goTo(app, .title),
+            .map => goTo(app, .map),
+            .settings => goTo(app, .settings),
+            .play => |index| {
+                app.game.start(index);
+                goTo(app, .play);
+            },
+        }
+        // Back on the title closes the game (Esc, or Android's Back).
+        if (app.screen == .title and action == .none and ui.pointer.back) input.quit_requested = true;
+    }
 
     // F1 or ` (three fingers on Android), in Debug and ReleaseSafe builds.
     if (input.debug_toggle) app.show_debug = !app.show_debug;
     if (pequi.internal and app.show_debug) {
         pequi.debug.drawOverlay(render, null, &.{.{ .name = "lume", .arena = &app.arena }});
     }
+}
+
+fn goTo(app: *App, screen: Screen) void {
+    app.screen = screen;
+    app.reader = .{};
+    app.menu = .{};
 }
 
 pub fn getSoundSamples(memory: *pequi.GameMemory, buffer: *pequi.SoundBuffer) void {
@@ -92,5 +185,7 @@ pub fn getSoundSamples(memory: *pequi.GameMemory, buffer: *pequi.SoundBuffer) vo
 test {
     _ = @import("sim.zig");
     _ = @import("input.zig");
+    _ = @import("progress.zig");
     _ = game;
+    _ = screens;
 }

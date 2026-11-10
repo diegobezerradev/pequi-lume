@@ -18,7 +18,7 @@ atualizado.
 | 4 | Haptics | não | nenhum (a Fase 3 pede "se a engine expuser") |
 | 5 | Toques no Win32 | não | mouse; botão direito e Espaço para apagar |
 | 6 | Roteiro headless só com um dedo | **fechada** em `00d72eb` | |
-| 7 | Densidade da tela (dp) | não | alvo de toque fixo em unidades virtuais |
+| 7 | Densidade da tela (dp) | **fechada** em `252ae7b` | |
 
 ## 1. Render-to-texture
 
@@ -94,6 +94,9 @@ também em `input.touches`. Abaixo, o registro original.
   apagar direto na simulação.
 
 ## 7. Densidade da tela
+
+**Fechada em `252ae7b`:** `Input.pixels_per_dp` e `Input.dpToVirtual`.
+Abaixo, o registro original.
 
 - **Falta:** o `Input` traz a janela em pixels, não em dp.
 - **Por quê:** "alvos de toque ≥ 48dp".

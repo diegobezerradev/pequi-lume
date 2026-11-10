@@ -1,0 +1,6 @@
+# A tall phone, 9:20: 540 x 1200 units.
+shot 30 title.ppm
+tap 40 270 978
+shot 70 map.ppm
+tap 80 93 240
+shot 190 level.ppm

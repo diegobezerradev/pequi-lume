@@ -6,8 +6,10 @@ O que ficou para depois, com o motivo. Nenhum TODO vive só no código.
 | --- | --- | --- | --- |
 | 1 | Interpolar o desenho entre dois passos da simulação | a simulação anda a 120 Hz; em telas de 90 ou 144 Hz o número de passos por frame alterna e o movimento pode tremer de leve | Fase 3 |
 | 2 | Botão de apagar na tela, como alternativa aos dois dedos | só o aparelho diz se segurar dois dedos enquanto se arrasta é confortável | depois do primeiro teste no celular |
-| 3 | Custo para o pulso longe de predadores | hoje pulsar longe de um sapo é de graça; a coruja (Chapada) dá esse custo, mas na Vereda ele depende de onde os perdidos estão | Fase 2, ao desenhar as fases |
-| 4 | Fonte de verdade | o texto usa a fonte 8x8 embutida, sem acentos | Fase 2, com a arte |
-| 5 | Folhas do primeiro plano podem cobrir vaga-lumes | hoje são poucas e deixam ver através; conferir no aparelho | Fase 2, com a arte |
-| 6 | Volume nas configurações | os volumes salvos já são lidos, mas não há tela para mudá-los | Fase 2 |
-| 7 | Tempo de frame em GPU de verdade | aqui o GL é por software; só o tempo de CPU do jogo foi medido | no PC e no celular do Diego |
+| 3 | Custo para o pulso longe de predadores na Vereda | pulsar longe de um sapo é de graça; a partir do Campo Sujo o pulso é necessário (teias) e na Chapada chama a coruja | se o teste no aparelho mostrar que a Vereda fica fácil demais |
+| 4 | Arte ilustrada | plantas e bichos são formas feitas em código (discos e traços); já têm silhueta própria (buriti, canela-de-ema, pequizeiro), mas não são desenhos | depois da Fase 3, se o Diego quiser |
+| 5 | Folhas do primeiro plano podem cobrir vaga-lumes | são poucas e escuras; conferir no aparelho | teste no celular |
+| 6 | Tempo de frame em GPU de verdade | aqui o GL é por software; só o tempo de CPU do jogo foi medido | no PC e no celular do Diego |
+| 7 | Dificuldade com jogadores de verdade | as fases foram conferidas por robôs, que reagem na hora e não se perdem no escuro | teste no celular |
+| 8 | Haptics | a engine ainda não vibra o aparelho (lacuna 4) | Fase 3 |
+| 9 | O robô demora na fase 8 | fica 2 min tentando um grupo dentro de uma teia antes de desistir; é do robô, não da fase | quando atrapalhar |

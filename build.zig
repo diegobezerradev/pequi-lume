@@ -18,6 +18,8 @@ pub fn build(b: *std.Build) void {
         .window_size = .{ 540, 960 },
     });
 
+    pequi.addAssetPack(b, pequi_dep, game, b.path("data/manifest.txt"), "lume");
+
     const install_library = b.addInstallArtifact(game.library, .{});
     b.getInstallStep().dependOn(&install_library.step);
 
@@ -79,15 +81,20 @@ pub fn build(b: *std.Build) void {
     // Scripted runs through the game, saving screenshots (Linux + Mesa).
     const shots = b.step("shots", "Play the scripts in tools/shots/ headless; screenshots go to zig-out/shots/<script>/");
     const scripts = [_]struct { []const u8, u32 }{
-        .{ "play", 1500 }, .{ "win", 4600 }, .{ "lose", 2200 },
+        .{ "tour", 340 },  .{ "play", 1300 }, .{ "win1", 3600 }, .{ "lose", 2000 },
+        .{ "webs", 4900 }, .{ "wind", 5700 }, .{ "emas", 9600 },
     };
     for (scripts) |sc| {
         pequi.addScriptedRun(b, game, shots, b.path(b.fmt("tools/shots/{s}.txt", .{sc[0]})), sc[1], "720x1280", b.fmt("shots/{s}", .{sc[0]}));
     }
 
+    // The same tour on a tall phone (9:20) and on the widest shape (4:5).
+    pequi.addScriptedRun(b, game, shots, b.path("tools/shots/tall.txt"), 200, "720x1600", "shots/tall");
+    pequi.addScriptedRun(b, game, shots, b.path("tools/shots/wide.txt"), 200, "800x1000", "shots/wide");
+
     // 200 fireflies at once: the game logs what its frame costs.
     const stress = b.step("stress", "Fly 200 fireflies around headless and print the cost of the frame");
-    pequi.addScriptedRun(b, game, stress, b.path("tools/shots/stress.txt"), 1500, "720x1280", "shots/stress");
+    pequi.addScriptedRun(b, game, stress, b.path("tools/shots/stress.txt"), 1600, "720x1280", "shots/stress");
 
     const check_render = b.step("check-render", "Render the game offscreen with GL 3.3 and GLES 3.0 (Linux + Mesa)");
     pequi.addRenderCheckIn(b, game, check_render, 120, "720x1280");

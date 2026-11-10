@@ -1,8 +1,9 @@
-# Losing on purpose: fly straight to the first frog and stay there, shining.
-drag 20 260 380 260 380 280
-shot 310 arrived.ppm
-shot 420 frog_a.ppm
-shot 480 frog_b.ppm
-shot 700 fewer.ppm
-shot 1400 last.ppm
-shot 2100 end.ppm
+# Losing on purpose in level 3: fly up to the first frog and stay, shining.
+tap 20 270 730
+hold 40 start 1
+tap 60 329 200
+drag 100 270 380 270 380 1500
+shot 600 a.ppm
+shot 1100 b.ppm
+shot 1600 c.ppm
+shot 1900 end.ppm

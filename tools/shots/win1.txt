@@ -1,0 +1,14 @@
+# The robot plays a level to the end (Enter turns it on, in debug builds).
+tap 20 270 730
+hold 40 start 1
+tap 60 93 200
+hold 100 start 1
+shot 400 f400.ppm
+shot 900 f900.ppm
+shot 1500 f1500.ppm
+shot 2100 f2100.ppm
+shot 2800 f2800.ppm
+shot 3500 f3500.ppm
+# Back to the map: the stars are kept.
+tap 3400 270 906
+shot 3500 map_after.ppm

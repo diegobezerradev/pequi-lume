@@ -17,6 +17,10 @@ pub const Pointer = struct {
     y: f32 = 0,
     down: bool = false,
     pressed: bool = false,
+    released: bool = false,
+    /// Where the press that is held (or just ended) began.
+    press_x: f32 = 0,
+    press_y: f32 = 0,
     tap: bool = false,
     dark: bool = false,
     back: bool = false,
@@ -65,7 +69,10 @@ pub const Reader = extern struct {
             const dy = p.y - r.press_y;
             if (dx * dx + dy * dy > tap_distance * tap_distance or p.dark) r.spoiled = true;
         }
-        if (left.wasReleased() and !r.spoiled and r.held_seconds <= tap_seconds) p.tap = true;
+        p.released = left.wasReleased();
+        p.press_x = r.press_x;
+        p.press_y = r.press_y;
+        if (p.released and !r.spoiled and r.held_seconds <= tap_seconds) p.tap = true;
         return p;
     }
 };

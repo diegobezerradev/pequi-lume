@@ -24,8 +24,17 @@ pub const Sounds = extern struct {
     miss: pequi.audio.Sound,
     denied: pequi.audio.Sound,
     lose: pequi.audio.Sound,
+    stuck: pequi.audio.Sound,
+    screech: pequi.audio.Sound,
+    whoosh: pequi.audio.Sound,
+    howl: pequi.audio.Sound,
+    /// The night, in layers: each loops, and the region sets the mix.
     crickets: pequi.audio.Sound,
+    frogs: pequi.audio.Sound,
+    wind: pequi.audio.Sound,
     crickets_handle: pequi.audio.Handle,
+    frogs_handle: pequi.audio.Handle,
+    wind_handle: pequi.audio.Handle,
     /// The mound's chord: notes still to play, and the wait for the next.
     chord_next: u32,
     chord_timer: f32,
@@ -63,17 +72,42 @@ pub const Sounds = extern struct {
             .{ .wave = .sine, .frequency = 311, .frequency_end = 294, .seconds = 0.5, .volume = 0.3, .release = 0.3 },
             .{ .wave = .sine, .frequency = 233, .frequency_end = 196, .seconds = 0.9, .volume = 0.32, .release = 0.6 },
         }, &.{ 0, 0.4, 0.8 });
+        s.stuck = synth.tone(arena, rate, .{ .wave = .triangle, .frequency = 620, .frequency_end = 520, .seconds = 0.16, .volume = 0.3, .attack = 0.002, .decay = 0.05, .sustain = 0.3, .release = 0.08 });
+        s.screech = build(arena, 0.7, &.{
+            .{ .wave = .square, .frequency = 1250, .frequency_end = 620, .seconds = 0.55, .volume = 0.16, .duty = 0.2, .attack = 0.03, .release = 0.25 },
+            .{ .wave = .noise, .frequency = 5000, .seconds = 0.5, .volume = 0.1, .attack = 0.05, .release = 0.3 },
+        }, &.{ 0, 0.02 });
+        s.whoosh = synth.tone(arena, rate, .{ .wave = .noise, .frequency = 700, .seconds = 0.35, .volume = 0.3, .attack = 0.08, .decay = 0.1, .sustain = 0.5, .release = 0.15 });
+        s.howl = build(arena, 2.2, &.{
+            .{ .wave = .sine, .frequency = 294, .frequency_end = 440, .seconds = 0.7, .volume = 0.22, .attack = 0.15, .release = 0.2 },
+            .{ .wave = .sine, .frequency = 440, .frequency_end = 392, .seconds = 1.4, .volume = 0.22, .attack = 0.1, .decay = 0.4, .sustain = 0.6, .release = 0.7 },
+        }, &.{ 0, 0.6 });
         s.crickets = crickets(arena);
+        s.frogs = frogChorus(arena);
+        s.wind = synth.tone(arena, rate, .{ .wave = .noise, .frequency = 420, .seconds = 4, .volume = 0.5, .attack = 0, .decay = 0, .sustain = 1, .release = 0 });
         s.crickets_handle = .none;
+        s.frogs_handle = .none;
+        s.wind_handle = .none;
         s.chord_next = chord.len;
         s.chord_timer = 0;
         s.ready = true;
     }
 
-    /// The night goes on in a loop, under everything.
-    pub fn ambience(s: *Sounds, mixer: *pequi.audio.Mixer) void {
-        if (!s.ready or mixer.isPlaying(s.crickets_handle)) return;
-        s.crickets_handle = mixer.play(&s.crickets, .{ .bus = .music, .volume = 0.5, .looping = true, .fade_in = 1.5 });
+    /// The night goes on in loops under everything. `mix` is how loud each
+    /// layer is here and now: crickets, frogs, wind.
+    pub fn ambience(s: *Sounds, mixer: *pequi.audio.Mixer, mix: [3]f32) void {
+        if (!s.ready) return;
+        const layers = [_]struct { *pequi.audio.Handle, *const pequi.audio.Sound }{
+            .{ &s.crickets_handle, &s.crickets },
+            .{ &s.frogs_handle, &s.frogs },
+            .{ &s.wind_handle, &s.wind },
+        };
+        for (layers, mix) |layer, volume| {
+            if (!mixer.isPlaying(layer[0].*)) {
+                layer[0].* = mixer.play(layer[1], .{ .bus = .music, .volume = 0, .looping = true });
+            }
+            mixer.setVolume(layer[0].*, volume, 0, 0.4);
+        }
     }
 
     /// `streak`: how many were rescued in a row (1 for the first).
@@ -121,6 +155,28 @@ fn build(arena: *pequi.Arena, seconds: f32, notes: []const synth.Note, starts: [
     defer temp.end();
     const buffer = arena.pushArray(f32, frames);
     for (notes, starts) |note, start| synth.addNote(buffer, rate, start, note);
+    for (buffer, samples) |value, *out| out.* = @intFromFloat(std.math.clamp(value, -1, 1) * 32767);
+    return .{ .samples = samples.ptr, .frame_count = @intCast(frames), .channel_count = 1, .sample_rate = rate };
+}
+
+/// Eight seconds of frogs far away: low double croaks, now here, now there.
+fn frogChorus(arena: *pequi.Arena) pequi.audio.Sound {
+    const seconds: f32 = 8;
+    const frames: usize = @intFromFloat(seconds * rate);
+    const samples = arena.pushArray(i16, frames);
+    const temp = arena.beginTemp();
+    defer temp.end();
+    const buffer = arena.pushArray(f32, frames);
+    const calls = [_]struct { f32, f32, f32 }{
+        // when, pitch, volume
+        .{ 0.3, 92, 0.1 },   .{ 1.9, 110, 0.07 }, .{ 2.6, 84, 0.09 },  .{ 4.2, 98, 0.1 },
+        .{ 5.0, 120, 0.06 }, .{ 6.1, 88, 0.09 },  .{ 7.0, 104, 0.07 },
+    };
+    for (calls) |c| {
+        for (0..2) |i| {
+            synth.addNote(buffer, rate, c[0] + @as(f32, @floatFromInt(i)) * 0.2, .{ .wave = .square, .frequency = c[1], .frequency_end = c[1] * 1.25, .seconds = 0.16, .volume = c[2], .duty = 0.3, .attack = 0.01, .release = 0.05 });
+        }
+    }
     for (buffer, samples) |value, *out| out.* = @intFromFloat(std.math.clamp(value, -1, 1) * 32767);
     return .{ .samples = samples.ptr, .frame_count = @intCast(frames), .channel_count = 1, .sample_rate = rate };
 }

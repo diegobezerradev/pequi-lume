@@ -1,0 +1,13 @@
+# The robot plays a level to the end (Enter turns it on, in debug builds).
+tap 20 270 730
+hold 40 start 1
+tap 60 447 775
+hold 100 start 1
+shot 800 f800.ppm
+shot 1600 f1600.ppm
+shot 2400 f2400.ppm
+shot 3600 f3600.ppm
+shot 4800 f4800.ppm
+shot 6000 f6000.ppm
+shot 7500 f7500.ppm
+shot 9500 f9500.ppm

@@ -52,7 +52,7 @@ e README no `pequi`. Detalhes em `ENGINE_GAPS.md`.
 Ficam de fora: janela no Linux (3, combinado com o Diego) e toques no
 Win32 (5, o mouse resolve).
 
-## Fase 1: fatia vertical
+## Fase 1: fatia vertical (feita)
 
 1. Esqueleto do repositório (build, CI, Android) e tela preta rodando.
 2. Líder + boids em arrays fixos (200), com testes de contagem e determinismo.
@@ -69,14 +69,16 @@ Win32 (5, o mouse resolve).
 `check-render` passam; uma partida ganha e uma perdida de propósito (robô e
 roteiro); relatório com tempos de frame.
 
-## Fase 2: jogo completo
+## Fase 2: jogo completo (feita)
 
 - 12 fases: Vereda 1-4 (sapos), Campo Sujo 5-8 (teias), Chapada 9-12
   (corujas, vento); a 1 é o tutorial por gestos, a 12 usa tudo; lobo-guará
   a partir da 6.
 - Telas, progresso salvo, volumes, safe areas, alvos de 72 unidades.
 - Ambiente por região, escala de resgates, acorde do cupinzeiro.
-- Arte final em silhuetas, paralaxe de 4 camadas, vegetação balançando.
+- Silhuetas próprias de cada região (buriti, canela-de-ema, pequizeiro),
+  feitas em código; paralaxe de 4 camadas, vegetação balançando. Arte
+  ilustrada ficou no `BACKLOG.md`.
 
 ## Fase 3: game feel
 

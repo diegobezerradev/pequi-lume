@@ -1,7 +1,7 @@
 # Pequi: o que o Lume usa
 
-Notas da leitura do `pequi`, atualizadas para `00d72eb` (API de plataforma
-versão 12, Zig 0.17.0), que já tem as mudanças pedidas pelo Lume. Tudo que o jogo fizer precisa bater com este arquivo; se a engine
+Notas da leitura do `pequi`, atualizadas para `252ae7b` (API de plataforma
+versão 13, Zig 0.17.0), que já tem as mudanças pedidas pelo Lume. Tudo que o jogo fizer precisa bater com este arquivo; se a engine
 mudar, ele muda junto.
 
 ## 1. As quatro perguntas
@@ -13,8 +13,9 @@ mudar, ele muda junto.
 | Multitouch | **Sim, no Android** | `input.touches: [10]Touch` com `id`, `x`, `y`, `down`, `pressed`, `released` | dois dedos = apagar. No Win32 `touches` fica vazio (só mouse); lacuna 5 |
 | Vários sons com pitch | **Sim** | `Mixer`: 64 vozes, `PlayOptions.pitch`, `setPitch`, `setVolume` com rampa | escala de resgates com um som só; ambiente em camadas |
 
-O blend `.multiply` entrou junto. Ainda não há: haptics, janela no Linux,
-densidade da tela (dp), teclas além das mapeadas. Ver `ENGINE_GAPS.md`.
+O blend `.multiply` entrou junto, e depois a densidade da tela
+(`input.pixels_per_dp`). Ainda não há: haptics, janela no Linux, teclas
+além das mapeadas. Ver `ENGINE_GAPS.md`.
 
 ## 2. Fronteira engine/jogo
 
@@ -71,7 +72,10 @@ pub fn getSoundSamples(memory: *pequi.GameMemory, buffer: *pequi.SoundBuffer) vo
   `.expand_height` mantém a largura e deixa a altura seguir a janela entre
   os dois aspectos; fora deles, barras. Lume: 540 de largura, retrato.
 - `input.safe_area: Insets { left, top, right, bottom }` em unidades
-  virtuais. `input.window_width/height` em pixels reais. Não há dp.
+  virtuais. `input.window_width/height` em pixels reais.
+- `input.pixels_per_dp` e `input.dpToVirtual(48, render.width)`: o tamanho
+  de um alvo de toque de 48dp em unidades virtuais, nesta tela. O Lume usa
+  isso em `ui.touchSize` (entre 60 e 96 unidades).
 - Câmera: `render.setCamera(render, cx, cy, zoom)` (um mundo com y para
   baixo; `zoom` = pixels virtuais por unidade), `setScreenSpace`,
   `setTransform([16]f32)`. Trocar de transformação fecha o lote atual.

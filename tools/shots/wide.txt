@@ -1,0 +1,6 @@
+# The widest shape, 4:5: 540 x 675 units.
+shot 30 title.ppm
+tap 40 270 447
+shot 70 map.ppm
+tap 80 93 190
+shot 190 level.ppm
