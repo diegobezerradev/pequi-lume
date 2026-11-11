@@ -11,7 +11,6 @@ O que ficou para depois, com o motivo. Nenhum TODO vive só no código.
 | 9 | O robô demora na fase 8 | fica 2 min tentando um grupo dentro de uma teia antes de desistir; é do robô, não da fase | quando atrapalhar |
 | 10 | Haptics num motor de verdade | a chamada foi conferida numa JVM com classes de mentira; força e duração só o aparelho diz | teste no celular |
 | 12 | Texturas comprimidas | as ilustrações ocupam cerca de 40 MB de memória de vídeo sem compressão; a engine só carrega RGBA8 | se algum aparelho fraco reclamar |
-| 13 | Chiado no áudio | o Diego ouviu um chiado constante só dentro do jogo; a saída do jogo capturada sem aparelho é limpa, então a suspeita é a fila de áudio do Android secando quando o frame demora (corrigido na engine em `pequi`); a viola também perdeu o estouro de ruído; falta confirmar no aparelho | próximo teste |
 
 ## Ideias para depois
 
