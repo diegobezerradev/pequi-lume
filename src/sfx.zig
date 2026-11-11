@@ -81,7 +81,7 @@ pub const Sounds = extern struct {
         }, &.{ 0, 0.6 });
         s.crickets = crickets(arena);
         s.frogs = frogChorus(arena);
-        s.wind = synth.tone(arena, rate, .{ .wave = .noise, .frequency = 420, .seconds = 4, .volume = 0.5, .attack = 0, .decay = 0, .sustain = 1, .release = 0 });
+        s.wind = windLoop(arena);
         s.crickets_handle = .none;
         s.frogs_handle = .none;
         s.wind_handle = .none;
@@ -148,6 +148,46 @@ fn build(arena: *pequi.Arena, seconds: f32, notes: []const synth.Note, starts: [
     const buffer = arena.pushArray(f32, frames);
     for (notes, starts) |note, start| synth.addNote(buffer, rate, start, note);
     for (buffer, samples) |value, *out| out.* = @intFromFloat(std.math.clamp(value, -1, 1) * 32767);
+    return .{ .samples = samples.ptr, .frame_count = @intCast(frames), .channel_count = 1, .sample_rate = rate };
+}
+
+/// Six seconds of wind: a low, soft rush with no hiss in it (noise through
+/// two gentle low-pass filters), rising and falling, its end blended into
+/// its beginning so the loop has no seam.
+fn windLoop(arena: *pequi.Arena) pequi.audio.Sound {
+    const seconds: f32 = 6;
+    const frames: usize = @intFromFloat(seconds * rate);
+    const blend: usize = rate / 2;
+    const samples = arena.pushArray(i16, frames);
+    const temp = arena.beginTemp();
+    defer temp.end();
+    const buffer = arena.pushArray(f32, frames + blend);
+    var seed: u32 = 0x9e3779b9;
+    var low1: f32 = 0;
+    var low2: f32 = 0;
+    // One-pole low-pass at about 320 Hz, twice.
+    const k: f32 = 1 - @exp(-std.math.tau * 320.0 / @as(f32, rate));
+    for (buffer, 0..) |*out, i| {
+        seed ^= seed << 13;
+        seed ^= seed >> 17;
+        seed ^= seed << 5;
+        const white = @as(f32, @floatFromInt(seed >> 8)) / @as(f32, 1 << 23) - 1;
+        low1 += (white - low1) * k;
+        low2 += (low1 - low2) * k;
+        // Two slow swells whose periods divide the loop.
+        const t = @as(f32, @floatFromInt(i % frames)) / @as(f32, rate);
+        const swell = 0.7 + 0.2 * @sin(t * std.math.tau / 6) + 0.1 * @sin(t * std.math.tau / 2 + 1);
+        out.* = low2 * swell * 6;
+    }
+    for (samples, 0..) |*out, i| {
+        var value = buffer[i];
+        if (i < blend) {
+            // The start fades in while the overhang past the end fades out.
+            const a = @as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(blend));
+            value = value * a + buffer[frames + i] * (1 - a);
+        }
+        out.* = @intFromFloat(std.math.clamp(value, -1, 1) * 32767);
+    }
     return .{ .samples = samples.ptr, .frame_count = @intCast(frames), .channel_count = 1, .sample_rate = rate };
 }
 

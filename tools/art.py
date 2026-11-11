@@ -765,8 +765,10 @@ def icon_layers():
 
 
 def write_icons():
-    """art/icon.png (both layers together), the launcher icons for old
-    Android in every density, and the two layers for adaptive icons."""
+    """art/icon.png (both layers together, for stores and the README) and
+    the two layers of the adaptive icon. The game needs Android 8, where
+    every launcher uses the layers, so there are no plain square icons: a
+    launcher shown one would frame it in white."""
     from PIL import Image
     bg, fg = icon_layers()
     layers = []
@@ -779,14 +781,10 @@ def write_icons():
         layers.append(Image.open(out).convert("RGBA"))
         os.remove(out)
     res = os.path.join(ROOT, "android", "app", "src", "main", "res")
-    # Old launchers show the middle two thirds of the layers, as a square.
+    # The middle two thirds of the layers is what a launcher shows.
     whole = Image.alpha_composite(layers[0], layers[1])
     legacy = whole.crop((54, 54, 378, 378))
     legacy.resize((512, 512), Image.LANCZOS).save(os.path.join(ROOT, "art", "icon.png"))
-    for density, size in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
-        folder = os.path.join(res, "mipmap-" + density)
-        os.makedirs(folder, exist_ok=True)
-        legacy.resize((size, size), Image.LANCZOS).save(os.path.join(folder, "ic_launcher.png"))
     # The layers are 108dp: 432 pixels at the highest density.
     folder = os.path.join(res, "mipmap-xxxhdpi")
     layers[0].convert("RGB").save(os.path.join(folder, "ic_launcher_background.png"))

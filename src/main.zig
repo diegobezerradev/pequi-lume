@@ -29,7 +29,7 @@ const song_volume: f32 = 0.42;
 /// Plays the region's song, fading the other one out.
 fn playSong(app: *App, api: *const pequi.platform.PlatformApi, want: u32) void {
     if (want != app.song) {
-        if (app.song < no_song and app.has_song[app.song]) app.songs[app.song].stop(&app.mixer, 1.5);
+        if (app.song < no_song and app.has_song[app.song]) app.songs[app.song].stop(&app.mixer, 0.4);
         if (want < no_song and app.has_song[want]) app.songs[want].play(api, &app.mixer, .{ .bus = .music, .volume = song_volume, .fade_in = 2 }, true);
         app.song = want;
     }
@@ -165,7 +165,7 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
     } else {
         app.time += input.dt;
         // The menus keep the night's sound, quieter.
-        app.sounds.ambience(&app.mixer, .{ 0.35, 0.2, 0.03 });
+        app.sounds.ambience(&app.mixer, .{ 0.14, 0.16, 0 });
         const ui = Ui.init(input, render, &app.art, app.reader.read(input));
         const action: screens.Action = switch (app.screen) {
             .title => screens.title(&ui, input, app.time),

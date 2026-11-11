@@ -309,9 +309,10 @@ pub const Game = struct {
         const gust = @sqrt(g.sim.wind_x * g.sim.wind_x + g.sim.wind_y * g.sim.wind_y) / 700;
         const quiet: f32 = if (g.paused) 0.4 else 1;
         f.sounds.ambience(f.mixer, switch (level.region) {
-            .vereda => .{ 0.45 * quiet, 0.5 * quiet, 0.02 },
-            .campo_sujo => .{ 0.6 * quiet, 0.12 * quiet, 0.05 * quiet },
-            .chapada => .{ 0.22 * quiet, 0, (0.1 + 0.55 * gust) * quiet },
+            // Crickets stay low under the music; wind only where it blows.
+            .vereda => .{ 0.2 * quiet, 0.4 * quiet, 0 },
+            .campo_sujo => .{ 0.28 * quiet, 0.1 * quiet, 0 },
+            .chapada => .{ 0.1 * quiet, 0, (0.12 + 0.6 * gust) * quiet },
         });
 
         const t1 = api.perfCounter();
