@@ -117,6 +117,26 @@ test "a pulse calls lost fireflies from far away, and has a cooldown" {
     try testing.expectEqual(@as(u32, 1), countState(&s, .lost));
 }
 
+test "a pulse spends the swarm's light, which grows back" {
+    var s = field(10, 500, 500);
+    var e: sim.Events = .{};
+    const full = s.lightRadiusNow();
+    try testing.expectApproxEqAbs(sim.lightRadius(10, 1), full, 0.01);
+    s.step(.{ .pulse = true }, &e);
+    try testing.expect(s.lightRadiusNow() < full * 0.5);
+    run(&s, tune.pulse_cooldown * 0.5, .{}, &e);
+    try testing.expect(s.lightRadiusNow() > full * 0.5 and s.lightRadiusNow() < full * 0.8);
+    run(&s, tune.pulse_cooldown * 0.6, .{}, &e);
+    try testing.expectApproxEqAbs(full, s.lightRadiusNow(), 0.01);
+    // Spent, it does not reach a lost firefly it would reach at full light.
+    var near = field(10, 500, 500);
+    near.addFly(.lost, 500 + full * 0.7, 500);
+    near.flies[near.fly_count - 1].state = .lost;
+    near.pulse_cooldown = tune.pulse_cooldown;
+    near.step(.{}, &e);
+    try testing.expectEqual(@as(u32, 10), near.swarm);
+}
+
 test "a called firefly that never arrives gives up" {
     var s = field(1, 500, 500);
     s.addFly(.lost, 800, 500);

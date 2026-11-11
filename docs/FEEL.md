@@ -23,6 +23,7 @@ números estão em `src/game.zig` (tela) e em `sim.tune` (regras).
 | Elemento | O que acontece | Onde |
 | --- | --- | --- |
 | Coice do pulso | a câmera recua 3,5% e volta | `punch` |
+| Luz gasta | depois do pulso a luz do enxame cai a 45% do raio e volta em 2,6 s, junto com a barra de recarga | `Sim.lightRadiusNow` |
 | Clarão do pulso | uma onda de luz corre o mapa de luz e some em 1,4 s; faíscas saem do líder | `drawLights`, `react` |
 | Rastro dos chamados | vaga-lumes chamados por um pulso riscam um fio de luz até o enxame | `leaveTrails` |
 | Escala de resgates | cada resgate seguido toca uma nota acima, numa escala pentatônica | `Sounds.rescued` |

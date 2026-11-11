@@ -23,7 +23,7 @@ mais teste em aparelho; as pendências estão em `docs/BACKLOG.md`.
 | Ação | Toque | PC | O que faz |
 | --- | --- | --- | --- |
 | Guiar | arrastar | botão esquerdo | o líder voa para onde você aponta; o enxame vai atrás |
-| Pulsar | toque rápido | clique | um clarão mostra o mapa, chama os perdidos de longe e rasga as teias por perto, mas acorda os predadores |
+| Pulsar | toque rápido | clique | um clarão mostra o mapa, chama os perdidos de longe e rasga as teias por perto, mas acorda os predadores e gasta a luz: por 2,6 s o enxame ilumina menos da metade e vai voltando |
 | Apagar | segurar dois dedos | botão direito ou Espaço | o enxame some no escuro: ninguém o vê, mas ele anda devagar, não resgata e se espalha |
 
 - O tamanho do enxame é a sua vida e o alcance da sua luz.

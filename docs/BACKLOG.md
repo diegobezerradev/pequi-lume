@@ -5,7 +5,6 @@ O que ficou para depois, com o motivo. Nenhum TODO vive só no código.
 | # | Pendência | Por quê | Quando |
 | --- | --- | --- | --- |
 | 2 | Botão de apagar na tela, como alternativa aos dois dedos | só o aparelho diz se segurar dois dedos enquanto se arrasta é confortável | depois do primeiro teste no celular |
-| 3 | Custo para o pulso longe de predadores na Vereda | pulsar longe de um sapo é de graça; a partir do Campo Sujo o pulso é necessário (teias) e na Chapada chama a coruja | se o teste no aparelho mostrar que a Vereda fica fácil demais |
 | 5 | Folhas do primeiro plano podem cobrir vaga-lumes | são poucas e escuras; conferir no aparelho | teste no celular |
 | 6 | Tempo de frame em GPU de verdade | aqui o GL é por software; só o tempo de CPU do jogo foi medido | no PC e no celular do Diego |
 | 7 | Dificuldade com jogadores de verdade | as fases foram conferidas por robôs, que reagem na hora e não se perdem no escuro | teste no celular |

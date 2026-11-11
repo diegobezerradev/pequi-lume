@@ -23,7 +23,10 @@ pub const tune = struct {
     /// Seconds for the swarm's glow to fade out or come back.
     pub const glow_time: f32 = 0.18;
 
-    pub const pulse_cooldown: f32 = 1.6;
+    pub const pulse_cooldown: f32 = 2.6;
+    /// A pulse spends the swarm's light: right after it the light reaches
+    /// only this much of its radius, and grows back over the cooldown.
+    pub const pulse_spent_light: f32 = 0.45;
     /// Lost fireflies this close to a pulse come flying.
     pub const pulse_call_radius: f32 = 430;
     /// Predators this close to a pulse wake up.
@@ -362,8 +365,12 @@ pub const Sim = struct {
         if (state == .swarm) s.swarm += 1;
     }
 
+    /// The swarm's light now: its size, whether it is dark, and how much
+    /// of it the last pulse spent.
     pub fn lightRadiusNow(s: *const Sim) f32 {
-        return lightRadius(s.swarm, s.glow);
+        const back = 1 - s.pulse_cooldown / tune.pulse_cooldown;
+        const spent = tune.pulse_spent_light + (1 - tune.pulse_spent_light) * back * back;
+        return lightRadius(s.swarm, s.glow) * spent;
     }
 
     /// Predators see the swarm.
