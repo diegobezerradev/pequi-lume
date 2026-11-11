@@ -12,3 +12,14 @@ O que ficou para depois, com o motivo. Nenhum TODO vive só no código.
 | 10 | Haptics num motor de verdade | a chamada foi conferida numa JVM com classes de mentira; força e duração só o aparelho diz | teste no celular |
 | 12 | Texturas comprimidas | as ilustrações ocupam cerca de 40 MB de memória de vídeo sem compressão; a engine só carrega RGBA8 | se algum aparelho fraco reclamar |
 | 13 | Ouvir as músicas | foram sintetizadas e conferidas só por números (pico, volume, emenda do loop); ninguém as ouviu ainda | teste no celular |
+
+## Ideias para depois
+
+**Spin-off "de anúncio" (11/11/2026).** Um jogo irmão do Lume feito para
+aquele tipo de vídeo em que quem assiste vê a resposta e o jogador erra:
+cenas de 10 a 20 segundos, tudo à vista, escolhas óbvias com números
+(portões que somam ou multiplicam o enxame, caminho certo e errado), o
+desastre de uma vez só. Reaproveita o enxame, os predadores, a arte e a
+música; a escuridão vira tempero. O Lume fica como está. O anúncio deve
+sair do jogo real, gravado pelo modo sem janela com um robô que erra de
+propósito.
