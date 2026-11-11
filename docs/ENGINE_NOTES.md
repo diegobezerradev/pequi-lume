@@ -158,9 +158,10 @@ em si mesmos. Depois de `gpu_resources_lost` é só desenhar de novo.
 
 **A luz do Lume**, todo frame:
 1. céu e silhuetas de tudo, direto na tela;
-2. **mapa de luz** (alvo de 135x300): limpo em preto, e cada luz somada em
+2. **mapa de luz** (alvo de 270x600; luz é suave, não precisa de mais): limpo em preto, e cada luz somada em
    aditivo (o enxame, cada vaga-lume, o pulso, os perdidos, o cupinzeiro);
-3. **cores** (alvo de 540x1200): a cena com as cores que a luz revela, e
+3. **cores** (alvo do tamanho da tela em pixels, até 1440 de largura,
+   para as ilustrações não borrarem em tablet): a cena com as cores que a luz revela, e
    por cima o mapa de luz em `.multiply`; fica colorido só onde há luz;
 4. as cores somadas (aditivo) sobre as silhuetas da tela;
 5. o que brilha sozinho (vaga-lumes, olhos do sapo, larvas, partículas),

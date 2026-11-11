@@ -34,8 +34,6 @@ const App = struct {
     sounds: Sounds,
     pack: pequi.assets.Pack,
     has_pack: bool,
-    font: pequi.render.Font,
-    has_font: bool,
     progress: Progress,
 
     screen: Screen,
@@ -59,7 +57,6 @@ fn init(memory: *pequi.GameMemory) *App {
     app.volumes.apply(&app.mixer);
     app.art = .{};
     app.sounds.init(&app.arena);
-    app.has_font = false;
     app.has_pack = false;
     if (pequi.assets.Pack.open(&app.arena, api, "lume.pqa")) |pack| {
         app.pack = pack;
@@ -93,23 +90,21 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
     memory.display.min_aspect = 9.0 / 22.0;
     memory.display.max_aspect = 4.0 / 5.0;
 
-    if (memory.gpu_resources_lost) {
-        app.art.uploaded = false;
-        app.has_font = false;
-    }
-    if (!app.art.uploaded) app.art.upload(render);
-    if (app.has_pack and !app.has_font) {
-        if (app.pack.loadFont(api, &app.arena, render, &app.art.textures, "ui")) |font| {
-            app.font = font;
-            app.has_font = true;
-        } else |err| {
-            if (err != error.NoRoomThisFrame) {
-                pequi.log("lume: font: {s}", .{@errorName(err)});
-                app.has_pack = false;
-            }
+    if (memory.gpu_resources_lost) app.art.lost();
+    if (!app.art.ready()) {
+        app.art.load(if (app.has_pack) &app.pack else null, api, &app.arena, render);
+        if (!app.art.ready()) {
+            // Still loading: the night, and a thin line of light filling.
+            const w: f32 = @floatFromInt(render.width);
+            const h: f32 = @floatFromInt(render.height);
+            pequi.render.clear(render, 0.01, 0.02, 0.05);
+            pequi.render.rect(render, w * 0.3, h * 0.5, w * 0.7, h * 0.5 + 3, pequi.render.color(1, 1, 1, 0.12));
+            pequi.render.rect(render, w * 0.3, h * 0.5, w * (0.3 + 0.4 * app.art.progress()), h * 0.5 + 3, pequi.render.rgb(0.8, 1, 0.45));
+            app.fade = 1;
+            return;
         }
     }
-    const font: ?*const pequi.render.Font = if (app.has_font) &app.font else null;
+    app.art.fitColorTarget(input, render);
 
     if (app.screen == .play) {
         const index = app.game.sim.level_index;
@@ -120,7 +115,6 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
             .sounds = &app.sounds,
             .mixer = &app.mixer,
             .volumes = &app.volumes,
-            .font = font,
             .fullscreen = &memory.display.fullscreen,
             .best_stars = app.progress.stars[index],
             .is_last_level = index + 1 >= levels.all.len,
@@ -140,11 +134,11 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
         app.time += input.dt;
         // The menus keep the night's sound, quieter.
         app.sounds.ambience(&app.mixer, .{ 0.35, 0.2, 0.03 });
-        const ui = Ui.init(input, render, &app.art, font, app.reader.read(input));
+        const ui = Ui.init(input, render, &app.art, app.reader.read(input));
         const action: screens.Action = switch (app.screen) {
             .title => screens.title(&ui, input, app.time),
             .map => screens.map(&ui, input, app.time, &app.progress),
-            .settings => screens.settings(&ui, &app.menu, input, app.time, &app.volumes, &app.mixer, &memory.display.fullscreen, font),
+            .settings => screens.settings(&ui, &app.menu, input, app.time, &app.volumes, &app.mixer, &memory.display.fullscreen),
             .play => unreachable,
         };
         switch (action) {

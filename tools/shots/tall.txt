@@ -2,5 +2,5 @@
 shot 30 title.ppm
 tap 40 270 978
 shot 70 map.ppm
-tap 80 93 240
+tap 80 93 300
 shot 190 level.ppm

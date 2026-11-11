@@ -16,7 +16,9 @@ const juice = pequi.juice;
 const sim = @import("sim.zig");
 const levels = @import("levels.zig");
 const predators = @import("predators.zig");
-const Art = @import("art.zig").Art;
+const art_mod = @import("art.zig");
+const Art = art_mod.Art;
+const Picture = art_mod.Picture;
 const input_mod = @import("input.zig");
 const Sounds = @import("sfx.zig").Sounds;
 const Robot = @import("robot.zig").Robot;
@@ -30,7 +32,6 @@ pub const Frame = struct {
     sounds: *Sounds,
     mixer: *pequi.audio.Mixer,
     volumes: *pequi.audio.Volumes,
-    font: ?*const draw.Font,
     fullscreen: *bool,
     /// The stars this level already had, for the end screen.
     best_stars: u32,
@@ -163,10 +164,10 @@ pub const Game = struct {
         // vereda, canela-de-ema in the campo sujo, pequi trees on the chapada.
         const Want = struct { DecorKind, f32, f32, f32 };
         const wanted: [5]Want = switch (level.region) {
-            // kind, one per this many square units, smallest, largest
-            .vereda => .{ .{ .buriti, 70000, 170, 250 }, .{ .tree, 160000, 110, 170 }, .{ .bush, 50000, 26, 44 }, .{ .tuft, 13000, 10, 20 }, .{ .canela, 400000, 50, 70 } },
-            .campo_sujo => .{ .{ .canela, 34000, 46, 84 }, .{ .tree, 190000, 100, 150 }, .{ .bush, 36000, 24, 46 }, .{ .tuft, 11000, 10, 22 }, .{ .pequi, 260000, 120, 160 } },
-            .chapada => .{ .{ .pequi, 90000, 130, 190 }, .{ .canela, 110000, 44, 70 }, .{ .bush, 70000, 22, 40 }, .{ .tuft, 9000, 10, 24 }, .{ .buriti, 500000, 170, 220 } },
+            // kind, one per this many square units, smallest and largest scale
+            .vereda => .{ .{ .buriti, 70000, 0.8, 1.15 }, .{ .tree, 160000, 0.8, 1.15 }, .{ .bush, 50000, 0.8, 1.15 }, .{ .tuft, 13000, 0.8, 1.15 }, .{ .canela, 400000, 0.8, 1.15 } },
+            .campo_sujo => .{ .{ .canela, 34000, 0.8, 1.15 }, .{ .tree, 190000, 0.8, 1.15 }, .{ .bush, 36000, 0.8, 1.15 }, .{ .tuft, 11000, 0.8, 1.15 }, .{ .pequi, 260000, 0.8, 1.15 } },
+            .chapada => .{ .{ .pequi, 90000, 0.8, 1.15 }, .{ .canela, 110000, 0.8, 1.15 }, .{ .bush, 70000, 0.8, 1.15 }, .{ .tuft, 9000, 0.8, 1.15 }, .{ .buriti, 500000, 0.8, 1.15 } },
         };
         for (wanted) |w| {
             const count: u32 = @intFromFloat(area / w[1]);
@@ -209,7 +210,7 @@ pub const Game = struct {
         const level = levels.get(g.sim.level_index);
 
         const pointer = g.reader.read(f.input);
-        const ui = Ui.init(f.input, f.render, f.art, f.font, pointer);
+        const ui = Ui.init(f.input, f.render, f.art, pointer);
         if (pequi.internal) {
             if (pointer.robot) g.robot_on = !g.robot_on;
             if (pointer.fill) g.fill();
@@ -316,7 +317,7 @@ pub const Game = struct {
         const t1 = api.perfCounter();
         g.paint(f, &ui, level);
         g.drawHud(f, &ui, level, pause_x, pause_y);
-        const menu_action = if (g.paused) g.pauseMenu(f, ui.touch) else g.endScreen(f, &ui, level);
+        const menu_action = if (g.paused) g.pauseMenu(f, &ui) else g.endScreen(f, &ui, level);
         if (menu_action != .none) action = menu_action;
         const t2 = api.perfCounter();
         if (pequi.internal and g.stress) g.measure(api, t1 -% t0, t2 -% t1);
@@ -353,9 +354,9 @@ pub const Game = struct {
         }
     }
 
-    fn pauseMenu(g: *Game, f: *const Frame, touch: f32) Action {
+    fn pauseMenu(g: *Game, f: *const Frame, ui: *const Ui) Action {
         var action: Action = .none;
-        var menu = pequi.ui.begin(&g.menu, f.input, f.render, f.font, .{ .title = "Pausa", .theme = menu_theme, .item_height = touch, .width = 440 });
+        var menu = pequi.ui.begin(&g.menu, f.input, f.render, ui.menuFont(), .{ .title = "Pausa", .theme = menu_theme, .item_height = ui.touch, .width = 440 });
         if (menu.button("Continuar")) g.paused = false;
         if (menu.button("Recomeçar")) g.start(g.sim.level_index);
         if (menu.button("Mapa")) action = .map;
@@ -605,13 +606,13 @@ pub const Game = struct {
         draw.clear(render, 0, 0, 0);
         draw.setScreenSpace(render);
         // Each region has its own night: bluer, more violet, greener.
-        draw.sprite(render, art.sky, 0, 0, w, h, .{}, switch (level.region) {
-            .vereda => draw.white,
-            .campo_sujo => draw.rgb(1, 0.8, 1),
-            .chapada => draw.rgb(0.75, 1, 0.95),
-        });
-        g.drawFar(f, 0.5, 150, 0.55);
-        g.drawFar(f, 0.75, 210, 0.8);
+        const sky_tint = skyTint(level.region);
+        drawSky(render, art, g.cam_y / g.sim.height, sky_tint);
+        // In a level the stars are seen through the night air over the
+        // field: fainter than on the title, so lit ground covers them.
+        draw.rect(render, 0, 0, w, h, draw.color(0.03, 0.055, 0.12, 0.6));
+        g.drawFar(f, level, 0.45, 260, 0.5);
+        g.drawFar(f, level, 0.7, 330, 0.75);
         draw.setCamera(render, g.cam_x, g.cam_y, g.zoom);
         g.drawWorld(f, level, .silhouette);
 
@@ -670,30 +671,53 @@ pub const Game = struct {
         }
     }
 
-    /// The owls themselves, above everything on the ground.
+    /// The owls themselves, above everything on the ground: the body, and
+    /// two wings that beat from the shoulders.
     fn drawOwls(g: *Game, f: *const Frame) void {
         const render = f.render;
-        const disc = f.art.disc;
+        const art = f.art;
         draw.setCamera(render, g.cam_x, g.cam_y, g.zoom);
         for (g.sim.owls[0..g.sim.owl_count]) |owl| {
-            if (!g.visible(f, owl.x, owl.y, 200)) continue;
-            // High up it is large and faint; coming down it sharpens.
+            if (!g.visible(f, owl.x, owl.y, 260)) continue;
+            // High up it is large and dim; coming down it gathers and sharpens.
             const low: f32 = switch (owl.state) {
                 .patrol => 0,
                 .dive => 1 - owl.timer / sim.tune.owl_windup,
                 .strike => 1,
                 .climb => owl.timer / sim.tune.owl_cooldown,
             };
-            const size = 170 - 60 * low;
-            const tint = draw.color(0.01, 0.014, 0.03, 0.45 + 0.5 * low);
-            const flap = @sin(g.time * (2.2 + 4 * low) + owl.cx) * 0.25;
-            draw.spriteRotated(render, disc, owl.x - size * 0.38, owl.y, size * 0.8, size * 0.3, -0.25 + flap, .{}, tint);
-            draw.spriteRotated(render, disc, owl.x + size * 0.38, owl.y, size * 0.8, size * 0.3, 0.25 - flap, .{}, tint);
-            draw.sprite(render, disc, owl.x - size * 0.16, owl.y - size * 0.22, owl.x + size * 0.16, owl.y + size * 0.26, .{}, tint);
+            const k = (1.25 - 0.4 * low) * art_mod.unit;
+            const shade = 0.16 + 0.5 * low;
+            const tint = draw.color(shade * 0.8, shade * 0.9, shade * 1.25, 0.8 + 0.2 * low);
+            const body_w = 200 * k;
+            const body_h = 320 * k;
+            const wing_w = 440 * k;
+            const wing_h = 300 * k;
+            const top = owl.y - body_h * 0.42;
+            const flap = @sin(g.time * (2.4 + 5 * low) + owl.cx) * (0.16 + 0.1 * low) - 0.2 * low;
+            // Each wing turns about its shoulder, which is near the inner
+            // edge of its picture.
+            for ([_]f32{ -1, 1 }) |side| {
+                const shoulder_x = owl.x + side * body_w * 0.24;
+                const shoulder_y = top + body_h * 0.36;
+                const a = side * flap;
+                // From the shoulder to the picture's middle, turned by `a`.
+                const ox = -side * wing_w * (0.5 - 16.0 / 440.0);
+                const oy = wing_h * (0.5 - 70.0 / 300.0);
+                const cx = shoulder_x + ox * @cos(a) - oy * @sin(a);
+                const cy = shoulder_y + ox * @sin(a) + oy * @cos(a);
+                const uv: draw.UvRect = if (side < 0) .{} else .{ .min_u = 1, .max_u = 0 };
+                draw.spriteRotated(render, art.get(.owl_wing), cx, cy, wing_w, wing_h, a, uv, tint);
+            }
+            draw.sprite(render, art.get(.owl_body), owl.x - body_w / 2, top, owl.x + body_w / 2, top + body_h, .{}, tint);
             if (owl.state == .dive or owl.state == .strike) {
+                // Its eyes, fixed on the swarm.
                 draw.setBlend(render, .additive);
-                draw.sprite(render, f.art.glow, owl.x - 14, owl.y - 20, owl.x - 2, owl.y - 8, .{}, draw.color(1, 0.75, 0.2, low));
-                draw.sprite(render, f.art.glow, owl.x + 2, owl.y - 20, owl.x + 14, owl.y - 8, .{}, draw.color(1, 0.75, 0.2, low));
+                for ([_]f32{ -18, 18 }) |ex| {
+                    const x = owl.x + ex * k;
+                    const y = top + 66 * k;
+                    draw.sprite(render, art.glow, x - 9, y - 9, x + 9, y + 9, .{}, draw.color(1, 0.75, 0.2, low));
+                }
                 draw.setBlend(render, .alpha);
             }
         }
@@ -749,9 +773,9 @@ pub const Game = struct {
         }
     }
 
-    /// A far layer of hills and trees, moving slower than the world
-    /// (`parallax` below 1) and closer to the sky's color the farther it is.
-    fn drawFar(g: *Game, f: *const Frame, parallax: f32, cell: f32, darkness: f32) void {
+    /// A far layer of trees, moving slower than the world (`parallax` below
+    /// 1), smaller and fainter the farther it is.
+    fn drawFar(g: *Game, f: *const Frame, level: *const levels.Level, parallax: f32, cell: f32, nearness: f32) void {
         const render = f.render;
         const art = f.art;
         const w: f32 = @floatFromInt(render.width);
@@ -761,7 +785,13 @@ pub const Game = struct {
         draw.setCamera(render, cx, cy, g.zoom);
         const half_w = w / 2 / g.zoom + cell;
         const half_h = h / 2 / g.zoom + cell * 2;
-        const tint = draw.color(0.012, 0.02, 0.045, darkness);
+        // Far things take the color of the night air.
+        const tint = draw.color(0.035 + 0.02 * (1 - nearness), 0.06 + 0.03 * (1 - nearness), 0.14 + 0.05 * (1 - nearness), 0.55 + 0.4 * nearness);
+        const kinds: [3]Picture = switch (level.region) {
+            .vereda => .{ .buriti, .buriti, .tree },
+            .campo_sujo => .{ .tree, .canela, .bush },
+            .chapada => .{ .pequi, .tree, .canela },
+        };
         const salt: u32 = @intFromFloat(parallax * 1000);
         var iy: i32 = @intFromFloat(@floor((cy - half_h) / cell));
         const iy_end: i32 = @intFromFloat(@floor((cy + half_h) / cell));
@@ -770,53 +800,43 @@ pub const Game = struct {
             const ix_end: i32 = @intFromFloat(@floor((cx + half_w) / cell));
             while (ix <= ix_end) : (ix += 1) {
                 const pick = hash(ix, iy, salt);
-                if (pick > 0.42) continue;
+                if (pick > 0.34) continue;
                 const x = (@as(f32, @floatFromInt(ix)) + hash(ix, iy, salt + 1)) * cell;
                 const y = (@as(f32, @floatFromInt(iy)) + hash(ix, iy, salt + 2)) * cell;
-                const size = cell * (0.5 + hash(ix, iy, salt + 3) * 0.6);
-                if (pick < 0.24) {
-                    // A tree: a thin trunk under a round crown, swaying.
-                    const sway = @sin(g.time * 0.8 + x * 0.01) * size * 0.02;
-                    draw.rect(render, x - size * 0.035, y - size, x + size * 0.035, y, tint);
-                    draw.sprite(render, art.disc, x - size * 0.33 + sway, y - size * 1.3, x + size * 0.33 + sway, y - size * 0.7, .{}, tint);
-                } else {
-                    // A low hill or a clump of scrub.
-                    draw.sprite(render, art.disc, x - size, y - size * 0.3, x + size, y + size * 0.3, .{}, tint);
-                }
+                const picture = kinds[@intFromFloat(pick / 0.34 * 2.999)];
+                const size = pictureHeight(picture) * nearness * (0.8 + hash(ix, iy, salt + 3) * 0.4);
+                const sway = @sin(g.time * 0.7 + x * 0.01) * 0.012;
+                stand(render, art, picture, x, y, size, sway, tint, hash(ix, iy, salt + 4) < 0.5);
             }
         }
     }
 
-    /// Dark leaves close to the eye, moving faster than the world.
+    /// Dark branches close to the eye, moving faster than the world.
     fn drawCanopy(g: *Game, f: *const Frame) void {
         const render = f.render;
         const w: f32 = @floatFromInt(render.width);
         const h: f32 = @floatFromInt(render.height);
         const parallax: f32 = 1.4;
-        const cell: f32 = 420;
+        const cell: f32 = 430;
         const cx = g.cam_x * parallax;
         const cy = g.cam_y * parallax;
         draw.setCamera(render, cx, cy, g.zoom);
         const half_w = w / 2 / g.zoom + cell;
         const half_h = h / 2 / g.zoom + cell;
-        const tint = draw.color(0.004, 0.007, 0.018, 0.9);
+        const branch = f.art.get(.branch);
+        const tint = draw.color(0.006, 0.01, 0.026, 0.88);
         var iy: i32 = @intFromFloat(@floor((cy - half_h) / cell));
         const iy_end: i32 = @intFromFloat(@floor((cy + half_h) / cell));
         while (iy <= iy_end) : (iy += 1) {
             var ix: i32 = @intFromFloat(@floor((cx - half_w) / cell));
             const ix_end: i32 = @intFromFloat(@floor((cx + half_w) / cell));
             while (ix <= ix_end) : (ix += 1) {
-                if (hash(ix, iy, 77) > 0.3) continue;
+                if (hash(ix, iy, 77) > 0.22) continue;
                 const x = (@as(f32, @floatFromInt(ix)) + hash(ix, iy, 78)) * cell;
                 const y = (@as(f32, @floatFromInt(iy)) + hash(ix, iy, 79)) * cell;
-                // A branch: a few long leaves fanning out, swaying together.
-                const sway = @sin(g.time * 0.6 + x * 0.01) * 0.06;
-                const base = hash(ix, iy, 80) * std.math.tau;
-                for (0..5) |i| {
-                    const a = base + (@as(f32, @floatFromInt(i)) - 2) * 0.42 + sway;
-                    const len: f32 = 150 - @abs(@as(f32, @floatFromInt(i)) - 2) * 22;
-                    draw.spriteRotated(render, f.art.disc, x + @cos(a) * len / 2, y + @sin(a) * len / 2, len, 26, a, .{}, tint);
-                }
+                const angle = hash(ix, iy, 80) * std.math.tau + @sin(g.time * 0.6 + x * 0.01) * 0.05;
+                const size = 210 + hash(ix, iy, 81) * 110;
+                draw.spriteRotated(render, branch, x, y, size, size * 0.75, angle, .{}, tint);
             }
         }
     }
@@ -827,165 +847,120 @@ pub const Game = struct {
         return @abs(x - g.cam_x) < half_w and @abs(y - g.cam_y) < half_h;
     }
 
-    /// The level's own layer: water, plants, frogs, the mound. Once as
-    /// silhouettes, once in the colors light gives them.
+    /// The level's own layer: water, plants, frogs, webs, the wolf, the
+    /// mound. Once as dark shapes in the night, once in the colors light
+    /// gives them.
     fn drawWorld(g: *Game, f: *const Frame, level: *const levels.Level, pass: Pass) void {
         const render = f.render;
         const art = f.art;
-        const dark = draw.rgb(0.006, 0.01, 0.024);
+        // Unlit, things keep a trace of their shape in the night's blue.
+        const tint = if (pass == .silhouette) draw.rgb(0.05, 0.075, 0.16) else draw.white;
 
         // Lit, the ground is a meadow; unlit it is just the night.
         if (pass == .color) {
-            const reach = 2000;
-            draw.rect(render, g.cam_x - reach, g.cam_y - reach, g.cam_x + reach, g.cam_y + reach, draw.rgb(0.085, 0.15, 0.07));
+            const tile: f32 = 220;
+            const reach = 1400;
+            const x0 = @floor((g.cam_x - reach) / tile) * tile;
+            const y0 = @floor((g.cam_y - reach) / tile) * tile;
+            const n = @ceil(reach * 2 / tile) + 1;
+            draw.sprite(render, art.get(.ground), x0, y0, x0 + n * tile, y0 + n * tile, .{ .max_u = n, .max_v = n }, draw.white);
         }
 
-        for (level.ponds) |p| {
-            if (!g.visible(f, p.x, p.y, @max(p.rx, p.ry))) continue;
-            if (pass == .silhouette) {
-                // Even in the dark, still water holds a little of the sky.
-                draw.sprite(render, art.disc, p.x - p.rx, p.y - p.ry, p.x + p.rx, p.y + p.ry, .{}, draw.color(0.05, 0.085, 0.15, 0.55));
-            } else {
-                draw.sprite(render, art.disc, p.x - p.rx, p.y - p.ry, p.x + p.rx, p.y + p.ry, .{}, draw.rgb(0.1, 0.42, 0.55));
-                draw.sprite(render, art.disc, p.x - p.rx * 0.8, p.y - p.ry * 0.85, p.x + p.rx * 0.6, p.y + p.ry * 0.35, .{}, draw.rgb(0.18, 0.58, 0.68));
+        for (level.ponds, 0..) |p, pi| {
+            if (!g.visible(f, p.x, p.y, @max(p.rx, p.ry) * 1.3)) continue;
+            // Still water holds a little of the sky even in the dark.
+            const water = if (pass == .silhouette) draw.color(0.1, 0.16, 0.34, 0.9) else draw.white;
+            draw.sprite(render, art.get(.pond), p.x - p.rx * 1.13, p.y - p.ry * 1.18, p.x + p.rx * 1.13, p.y + p.ry * 1.18, .{}, water);
+            // Reeds along the far and near edges.
+            for (0..5) |k| {
+                const a = hash(@intCast(pi), @intCast(k), 55) * std.math.tau;
+                const rx = p.x + @cos(a) * p.rx * 1.02;
+                const ry = p.y + @sin(a) * p.ry * 1.02;
+                const sway = @sin(g.time * 1.2 + a * 3) * 0.03;
+                stand(render, art, .reeds, rx, ry + 8, 74 + hash(@intCast(pi), @intCast(k), 56) * 30, sway, tint, k % 2 == 0);
             }
         }
 
         // Frogs show only in the light.
         if (pass == .color) {
             for (g.sim.frogs[0..g.sim.frog_count]) |frog| {
-                if (!g.visible(f, frog.x, frog.y, 60)) continue;
+                if (!g.visible(f, frog.x, frog.y, 60) or frog.scared > 0) continue;
                 // Swelling before the strike: the warning.
                 const swell: f32 = if (frog.state == .windup) 1 + 0.4 * (1 - frog.timer / sim.tune.frog_windup) else 1;
-                const r = 17 * swell;
-                draw.sprite(render, art.disc, frog.x - r * 1.2, frog.y - r, frog.x + r * 1.2, frog.y + r, .{}, draw.rgb(0.42, 0.72, 0.2));
-                draw.sprite(render, art.disc, frog.x - r * 0.7, frog.y - r * 0.2, frog.x + r * 0.7, frog.y + r * 0.9, .{}, draw.rgb(0.8, 0.88, 0.4));
+                const fw = frog_width * swell;
+                const fh = frog_height * swell;
+                draw.sprite(render, art.get(.frog), frog.x - fw / 2, frog.y - fh * 0.62, frog.x + fw / 2, frog.y + fh * 0.38, .{}, draw.white);
             }
-        }
-
-        for (g.decor[0..g.decor_count]) |d| {
-            if (!g.visible(f, d.x, d.y, d.size * 1.5)) continue;
-            const sway = @sin(g.time * 1.1 + d.phase) * d.size * 0.025;
-            switch (d.kind) {
-                .tuft => {
-                    const tint = if (pass == .silhouette) dark else draw.rgb(0.3, 0.6, 0.18);
-                    for (0..3) |i| {
-                        const a = (@as(f32, @floatFromInt(i)) - 1) * 0.5 + sway * 0.08 - std.math.pi / 2.0;
-                        draw.spriteRotated(render, art.disc, d.x + @cos(a) * d.size / 2, d.y + @sin(a) * d.size / 2, d.size, 4, a, .{}, tint);
-                    }
-                },
-                .bush => {
-                    const tint = if (pass == .silhouette) dark else draw.rgb(0.16, 0.44, 0.15);
-                    const s = d.size;
-                    draw.sprite(render, art.disc, d.x - s + sway, d.y - s * 0.9, d.x + s * 0.3 + sway, d.y, .{}, tint);
-                    draw.sprite(render, art.disc, d.x - s * 0.3 - sway, d.y - s * 1.2, d.x + s - sway, d.y, .{}, tint);
-                    if (pass == .color) draw.sprite(render, art.disc, d.x - s * 0.1, d.y - s * 1.05, d.x + s * 0.6, d.y - s * 0.45, .{}, draw.rgb(0.3, 0.6, 0.2));
-                },
-                .buriti => {
-                    // A tall bare trunk and a round fan of fronds.
-                    const s = d.size;
-                    const trunk = if (pass == .silhouette) dark else draw.rgb(0.42, 0.3, 0.18);
-                    const frond = if (pass == .silhouette) dark else draw.rgb(0.16, 0.46, 0.18);
-                    draw.rect(render, d.x - s * 0.022, d.y - s, d.x + s * 0.022, d.y, trunk);
-                    const tx = d.x + sway * 0.6;
-                    const ty = d.y - s;
-                    for (0..11) |i| {
-                        const fi: f32 = @floatFromInt(i);
-                        // All around, the lower ones longer and drooping.
-                        const a = -std.math.pi / 2.0 + (fi - 5) * 0.5 + sway * 0.01;
-                        const len = s * (0.3 + 0.012 * @abs(fi - 5) * @abs(fi - 5));
-                        draw.spriteRotated(render, art.disc, tx + @cos(a) * len / 2, ty + @sin(a) * len / 2, len, s * 0.06, a, .{}, frond);
-                    }
-                    draw.sprite(render, art.disc, tx - s * 0.05, ty - s * 0.05, tx + s * 0.05, ty + s * 0.05, .{}, trunk);
-                },
-                .canela => {
-                    // Forked grey stems, each ending in a tuft of stiff leaves.
-                    const s = d.size;
-                    const stem = if (pass == .silhouette) dark else draw.rgb(0.3, 0.27, 0.24);
-                    const leaf = if (pass == .silhouette) dark else draw.rgb(0.22, 0.46, 0.36);
-                    for (0..3) |k| {
-                        const fk: f32 = @floatFromInt(k);
-                        const lean = (fk - 1) * 0.42 + @sin(d.phase + fk) * 0.12;
-                        const a = -std.math.pi / 2.0 + lean;
-                        const len = s * (0.75 + 0.2 * @sin(d.phase * 3 + fk * 2));
-                        const ex = d.x + @cos(a) * len;
-                        const ey = d.y + @sin(a) * len;
-                        draw.spriteRotated(render, art.disc, (d.x + ex) / 2, (d.y + ey) / 2, len, s * 0.09, a, .{}, stem);
-                        for (0..6) |i| {
-                            const la = a + (@as(f32, @floatFromInt(i)) - 2.5) * 0.36 + sway * 0.02;
-                            const ll = s * 0.38;
-                            draw.spriteRotated(render, art.disc, ex + @cos(la) * ll / 2, ey + @sin(la) * ll / 2, ll, 3, la, .{}, leaf);
-                        }
-                        // Its violet flower, when the light finds it.
-                        if (pass == .color and k == 1) draw.sprite(render, art.disc, ex - 4, ey - s * 0.3 - 4, ex + 4, ey - s * 0.3 + 4, .{}, draw.rgb(0.62, 0.4, 0.85));
-                    }
-                },
-                .pequi => {
-                    // A crooked trunk under a wide, lumpy crown, with fruit.
-                    const s = d.size;
-                    const trunk = if (pass == .silhouette) dark else draw.rgb(0.34, 0.24, 0.15);
-                    const crown = if (pass == .silhouette) dark else draw.rgb(0.2, 0.42, 0.14);
-                    const bend = @sin(d.phase) * s * 0.12;
-                    draw.spriteRotated(render, art.disc, d.x + bend / 2, d.y - s * 0.25, s * 0.55, s * 0.09, -std.math.pi / 2.0 + bend / s, .{}, trunk);
-                    draw.spriteRotated(render, art.disc, d.x + bend - s * 0.14, d.y - s * 0.62, s * 0.42, s * 0.06, -2.1, .{}, trunk);
-                    draw.spriteRotated(render, art.disc, d.x + bend + s * 0.14, d.y - s * 0.62, s * 0.42, s * 0.06, -1.05, .{}, trunk);
-                    for (0..5) |i| {
-                        const fi: f32 = @floatFromInt(i);
-                        const cx = d.x + bend + (fi - 2) * s * 0.2 + sway;
-                        const cy = d.y - s * (0.86 + 0.1 * @sin(d.phase * 2 + fi * 1.9));
-                        const r = s * (0.2 + 0.05 * @sin(d.phase + fi));
-                        draw.sprite(render, art.disc, cx - r, cy - r * 0.8, cx + r, cy + r * 0.8, .{}, crown);
-                        if (pass == .color and i % 2 == 0) draw.sprite(render, art.disc, cx - 5, cy + r * 0.3, cx + 5, cy + r * 0.3 + 10, .{}, draw.rgb(0.85, 0.75, 0.2));
-                    }
-                },
-                .tree => {
-                    const s = d.size;
-                    const trunk = if (pass == .silhouette) dark else draw.rgb(0.45, 0.28, 0.15);
-                    const crown = if (pass == .silhouette) dark else draw.rgb(0.14, 0.42, 0.16);
-                    draw.rect(render, d.x - s * 0.04, d.y - s, d.x + s * 0.04, d.y, trunk);
-                    draw.sprite(render, art.disc, d.x - s * 0.36 + sway, d.y - s * 1.3, d.x + s * 0.36 + sway, d.y - s * 0.62, .{}, crown);
-                    if (pass == .color) draw.sprite(render, art.disc, d.x - s * 0.2 + sway, d.y - s * 1.24, d.x + s * 0.24 + sway, d.y - s * 0.86, .{}, draw.rgb(0.24, 0.56, 0.2));
-                },
-            }
-        }
-
-        // Webs: thin threads that only a strong light picks out, and the
-        // spider in the middle.
-        if (pass == .color) {
+            // Webs: thin threads that only a strong light picks out, and
+            // the spider in the middle.
             for (g.sim.webs[0..g.sim.web_count]) |web| {
                 if (!g.visible(f, web.x, web.y, web.r)) continue;
                 g.drawWeb(f, web, draw.rgb(0.3, 0.32, 0.36));
-                draw.sprite(render, art.disc, web.x - 7, web.y - 9, web.x + 7, web.y + 9, .{}, draw.rgb(0.25, 0.12, 0.1));
+                draw.sprite(render, art.get(.spider), web.x - 15, web.y - 15, web.x + 15, web.y + 15, .{}, draw.white);
             }
         }
 
-        // The maned wolf: long legs, big ears, walking across.
-        if (g.sim.wolf.active) {
-            const wolf = g.sim.wolf;
-            const path = g.sim.wolf_path.?;
-            const dir: f32 = if (path.x1 > path.x0) 1 else -1;
-            const fur = if (pass == .silhouette) dark else draw.rgb(0.8, 0.38, 0.14);
-            const legs = if (pass == .silhouette) dark else draw.rgb(0.12, 0.08, 0.07);
-            const x = wolf.x;
-            const y = wolf.y;
-            for ([_]f32{ -26, -14, 16, 28 }, 0..) |lx, i| {
-                const swing = @sin(g.time * 7 + @as(f32, @floatFromInt(i)) * 1.6) * 7;
-                draw.rect(render, x + lx * dir + swing - 3, y - 52, x + lx * dir + swing + 3, y, legs);
+        // Plants, back to front; the wolf and the mound stand among them.
+        const wolf_y: f32 = if (g.sim.wolf.active) g.sim.wolf.y else std.math.floatMax(f32);
+        var wolf_drawn = false;
+        var mound_drawn = false;
+        for (g.decor[0..g.decor_count]) |d| {
+            if (!mound_drawn and d.y > g.sim.mound_y + 30) {
+                g.drawMound(f, tint);
+                mound_drawn = true;
             }
-            draw.sprite(render, art.disc, x - 44, y - 82, x + 44, y - 44, .{}, fur);
-            draw.sprite(render, art.disc, x + dir * 30 - 18, y - 108, x + dir * 30 + 18, y - 72, .{}, fur);
-            draw.spriteRotated(render, art.disc, x + dir * 24, y - 116, 26, 10, -1.2, .{}, fur);
-            draw.spriteRotated(render, art.disc, x + dir * 38, y - 116, 26, 10, -1.9, .{}, fur);
-            draw.spriteRotated(render, art.disc, x - dir * 50, y - 60, 40, 9, dir * 0.9, .{}, fur);
+            if (!wolf_drawn and d.y > wolf_y) {
+                g.drawWolf(f, tint);
+                wolf_drawn = true;
+            }
+            const picture: Picture = switch (d.kind) {
+                .tree => .tree,
+                .bush => .bush,
+                .tuft => .tuft,
+                .buriti => .buriti,
+                .canela => .canela,
+                .pequi => .pequi,
+            };
+            const height = pictureHeight(picture) * d.size;
+            if (!g.visible(f, d.x, d.y - height / 2, height)) continue;
+            // Tall things sway less; grass most of all.
+            const sway = @sin(g.time * 1.1 + d.phase) * (if (d.kind == .tuft) @as(f32, 0.07) else 0.014);
+            stand(render, art, picture, d.x, d.y, height, sway, tint, d.phase > std.math.pi);
         }
+        if (!mound_drawn) g.drawMound(f, tint);
+        if (!wolf_drawn and g.sim.wolf.active) g.drawWolf(f, tint);
+    }
 
-        // The termite mound: a tall rounded tower.
-        const mx = g.sim.mound_x;
-        const my = g.sim.mound_y;
-        const body = if (pass == .silhouette) dark else draw.rgb(0.62, 0.4, 0.2);
-        draw.sprite(render, art.disc, mx - 46, my - 150, mx + 46, my + 20, .{}, body);
-        draw.sprite(render, art.disc, mx - 62, my - 60, mx + 62, my + 40, .{}, body);
-        if (pass == .color) draw.sprite(render, art.disc, mx - 30, my - 135, mx + 14, my - 30, .{}, draw.rgb(0.78, 0.54, 0.3));
+    fn drawMound(g: *Game, f: *const Frame, tint: u32) void {
+        stand(f.render, f.art, .mound, g.sim.mound_x, g.sim.mound_y + 40, mound_height, 0, tint, false);
+    }
+
+    /// The maned wolf: the body, and four long legs that swing from the hips.
+    fn drawWolf(g: *Game, f: *const Frame, tint: u32) void {
+        const render = f.render;
+        const art = f.art;
+        const wolf = g.sim.wolf;
+        const path = g.sim.wolf_path orelse return;
+        const right = path.x1 > path.x0;
+        const dir: f32 = if (right) 1 else -1;
+        const k = wolf_scale * art_mod.unit;
+        const body_w = 520 * k;
+        const body_h = 380 * k;
+        const leg_w = 70 * k;
+        const leg_h = 240 * k;
+        // The hips are at these points of the body's picture.
+        const hip_y = wolf.y - leg_h + 6;
+        const top = hip_y - 240 * k;
+        const left = wolf.x - body_w / 2;
+        const flip: draw.UvRect = if (right) .{} else .{ .min_u = 1, .max_u = 0 };
+        for ([_]f32{ 132, 158, 296, 322 }, 0..) |hx, i| {
+            // The far pair first; each leg a quarter of a step from the last.
+            const swing = @sin(g.time * 6.5 + @as(f32, @floatFromInt(i)) * 1.7) * 0.32;
+            const x = wolf.x + dir * (hx * k - body_w / 2);
+            const leg_tint = if (i % 2 == 0) dim(tint, 0.7) else tint;
+            draw.spriteRotated(render, art.get(.wolf_leg), x + @sin(-swing) * leg_h / 2, hip_y + @cos(swing) * leg_h / 2, leg_w, leg_h, swing, flip, leg_tint);
+        }
+        draw.sprite(render, art.get(.wolf_body), left, top, left + body_w, top + body_h, flip, tint);
     }
 
     /// A web's threads: spokes from the middle and rings across them.
@@ -1076,9 +1051,14 @@ pub const Game = struct {
             if (!g.visible(f, frog.x, frog.y, 300)) continue;
             // Its eyes catch the light when it is about to strike, or awake.
             const eyes: f32 = if (frog.state == .windup) 1 else if (frog.alert > 0) 0.55 else 0;
-            if (eyes > 0) {
-                draw.sprite(render, glow_tex, frog.x - 13, frog.y - 15, frog.x - 1, frog.y - 3, .{}, draw.color(1, 0.85, 0.3, eyes));
-                draw.sprite(render, glow_tex, frog.x + 1, frog.y - 15, frog.x + 13, frog.y - 3, .{}, draw.color(1, 0.85, 0.3, eyes));
+            if (eyes > 0 and frog.scared == 0) {
+                // Where the eyes are in the frog's picture.
+                const swell: f32 = if (frog.state == .windup) 1 + 0.4 * (1 - frog.timer / sim.tune.frog_windup) else 1;
+                const ey = frog.y - frog_height * swell * (0.62 - 54.0 / 220.0);
+                for ([_]f32{ -1, 1 }) |side| {
+                    const ex = frog.x + side * frog_width * swell * (38.0 / 240.0);
+                    draw.sprite(render, glow_tex, ex - 9, ey - 9, ex + 9, ey + 9, .{}, draw.color(1, 0.85, 0.3, eyes));
+                }
             }
             if (frog.state == .strike) {
                 const dx = frog.tongue_x - frog.x;
@@ -1115,11 +1095,15 @@ pub const Game = struct {
             }
         }
 
-        // The maned wolf's eyes shine back.
+        // The maned wolf's eye shines back.
         if (s.wolf.active) {
-            const path = s.wolf_path.?;
-            const dir: f32 = if (path.x1 > path.x0) 1 else -1;
-            draw.sprite(render, glow_tex, s.wolf.x + dir * 34 - 7, s.wolf.y - 97, s.wolf.x + dir * 34 + 7, s.wolf.y - 83, .{}, draw.color(1, 0.8, 0.4, 0.9));
+            if (s.wolf_path) |path| {
+                const dir: f32 = if (path.x1 > path.x0) 1 else -1;
+                const k = wolf_scale * art_mod.unit;
+                const ex = s.wolf.x + dir * (426 - 260) * k;
+                const ey = s.wolf.y - 240 * k + 6 - (240 - 102) * k;
+                draw.sprite(render, glow_tex, ex - 8, ey - 8, ex + 8, ey + 8, .{}, draw.color(1, 0.8, 0.4, 0.9));
+            }
         }
 
         // Many halos on one spot would burn to white: each dims as they crowd.
@@ -1170,11 +1154,11 @@ pub const Game = struct {
                 const lx = p[0];
                 const ly = p[1];
                 const twinkle = 0.75 + 0.25 * @sin(g.time * 6 + @as(f32, @floatFromInt(i)));
-                const size = 16 * juice.Ease.apply(.out_back, on);
+                const size = 11 * juice.Ease.apply(.out_back, on);
                 draw.sprite(render, glow_tex, lx - size, ly - size, lx + size, ly + size, .{}, draw.color(0.65, 1, 0.5, twinkle));
                 draw.sprite(render, disc, lx - 2, ly - 2, lx + 2, ly + 2, .{}, draw.color(0.9, 1, 0.8, on));
             }
-            draw.sprite(render, glow_tex, s.mound_x - 260, s.mound_y - 320, s.mound_x + 260, s.mound_y + 200, .{}, draw.color(0.6, 1, 0.4, 0.3 * lit));
+            draw.sprite(render, glow_tex, s.mound_x - 260, s.mound_y - 320, s.mound_x + 260, s.mound_y + 200, .{}, draw.color(0.6, 1, 0.4, 0.16 * lit));
         }
     }
 
@@ -1259,6 +1243,74 @@ const menu_theme: pequi.ui.Theme = .{
 };
 
 pub const theme = menu_theme;
+
+/// A color made darker, its alpha kept.
+fn dim(rgba: u32, k: f32) u32 {
+    const r: f32 = @floatFromInt(rgba & 0xff);
+    const gr: f32 = @floatFromInt((rgba >> 8) & 0xff);
+    const b: f32 = @floatFromInt((rgba >> 16) & 0xff);
+    const a: f32 = @floatFromInt(rgba >> 24);
+    return draw.color(r * k / 255, gr * k / 255, b * k / 255, a / 255);
+}
+
+const frog_width: f32 = 52;
+const frog_height: f32 = 48;
+const mound_height: f32 = 206;
+const wolf_scale: f32 = 0.78;
+
+/// How tall a picture stands in the world, in units, at size 1.
+fn pictureHeight(picture: Picture) f32 {
+    return switch (picture) {
+        .buriti => 250,
+        .pequi => 200,
+        .tree => 165,
+        .canela => 96,
+        .bush => 60,
+        .tuft => 44,
+        else => 100,
+    };
+}
+
+/// Draws a picture standing on the ground at (x, y), `height` units tall,
+/// leaning by `lean` radians about its foot (for swaying), maybe mirrored.
+pub fn stand(render: *pequi.RenderCommands, art: *const Art, picture: Picture, x: f32, y: f32, height: f32, lean: f32, tint: u32, mirrored: bool) void {
+    const texture = art.get(picture);
+    if (texture.height == 0) return;
+    const width = height * @as(f32, @floatFromInt(texture.width)) / @as(f32, @floatFromInt(texture.height));
+    // The pictures have a little ground under the foot.
+    const up = height * 0.47;
+    const uv: draw.UvRect = if (mirrored) .{ .min_u = 1, .max_u = 0 } else .{};
+    draw.spriteRotated(render, texture, x + @sin(lean) * up, y - @cos(lean) * up, width, height, lean, uv, tint);
+}
+
+/// Each region has its own night: bluer, more violet, greener.
+pub fn skyTint(region: levels.Region) u32 {
+    return switch (region) {
+        .vereda => draw.white,
+        .campo_sujo => draw.rgb(1, 0.82, 1),
+        .chapada => draw.rgb(0.78, 1, 0.95),
+    };
+}
+
+/// The night sky behind everything. It is taller than the screen: `scroll`
+/// (0 at the top of the level, 1 at the bottom) slides it a little, so the
+/// stars move as the swarm travels.
+pub fn drawSky(render: *pequi.RenderCommands, art: *const Art, scroll: f32, tint: u32) void {
+    const w: f32 = @floatFromInt(render.width);
+    const h: f32 = @floatFromInt(render.height);
+    const sky = art.get(.sky);
+    if (sky.height == 0) return;
+    draw.setScreenSpace(render);
+    // The picture covers the width; its height is 2400 for 1080.
+    const sky_h = w * @as(f32, @floatFromInt(sky.height)) / @as(f32, @floatFromInt(sky.width));
+    const slack = @max(0, sky_h - h);
+    const top = -slack * std.math.clamp(scroll, 0, 1);
+    if (sky_h >= h) {
+        draw.sprite(render, sky, 0, top, w, top + sky_h, .{}, tint);
+    } else {
+        draw.sprite(render, sky, 0, 0, w, h, .{}, tint);
+    }
+}
 
 /// A steady pseudo-random number in [0, 1) for a grid cell.
 fn hash(ix: i32, iy: i32, salt: u32) f32 {

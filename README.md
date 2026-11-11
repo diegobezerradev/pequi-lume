@@ -9,14 +9,14 @@ Nacional das Emas. Feito na engine
 | | | |
 | --- | --- | --- |
 | ![Título](art/screens/titulo.png) | ![Mapa](art/screens/mapa.png) | ![Pulso](art/screens/pulso.png) |
-| ![Teias](art/screens/teias.png) | ![Chapada](art/screens/chapada.png) | ![Aceso](art/screens/aceso.png) |
+| ![Teias](art/screens/teias.png) | ![Chapada](art/screens/chapada.png) | ![Apagado](art/screens/apagado.png) |
 
 ## Estado
 
 **Completo nas três fases do plano:** 12 fases em três regiões, com
 título, mapa, pausa, ajustes, progresso salvo e o polimento de game feel
-(`docs/FEEL.md`). A arte e os sons são feitos em código. Falta o teste em
-aparelho; as pendências estão em `docs/BACKLOG.md`.
+(`docs/FEEL.md`). A arte é ilustrada e os sons são sintetizados. Falta
+mais teste em aparelho; as pendências estão em `docs/BACKLOG.md`.
 
 ## Como se joga
 
@@ -85,10 +85,11 @@ src/
   screens.zig      título, mapa e ajustes
   ui.zig           texto e botões do tamanho de um dedo (48dp)
   progress.zig     as estrelas de cada fase, salvas
-  art.zig          as texturas, geradas em código
+  art.zig          as ilustrações do pacote, as luzes feitas em código, os alvos de luz e cor
   sfx.zig          os sons, gerados em código
   main.zig         memória, áudio, telas, laço do frame
 tools/
+  art.py, draw.py  desenham as ilustrações em SVG e as renderizam
   levels.py        desenha as 12 fases a partir de faixas (lagoa, portão, teias, ronda...)
   robots.zig       os robôs em todas as fases
   shots/           roteiros para `zig build shots`
@@ -108,8 +109,31 @@ A luz é o jogo. Todo frame, tudo é desenhado como silhueta contra o céu;
 as luzes são somadas numa textura pequena (o mapa de luz); as cores da cena
 são multiplicadas por ele e somadas por cima. Só há cor onde há luz.
 
-## Licenças
+## Arte, som e licenças
 
-As imagens e os sons são originais e gerados por código (`src/art.zig`,
-`src/sfx.zig`). A única peça de terceiros é a fonte Bitter (SIL Open Font
+A arte é ilustração vetorial: formas orgânicas em poucos tons chapados, com
+sombra e luz recortadas dentro de cada forma. Cada desenho é escrito como
+SVG por `tools/art.py` (com os pincéis de `tools/draw.py`) e renderizado
+com `rsvg-convert` a três pixels por unidade do mundo, para ficar nítido
+em tablet. Os SVG ficam em `art/svg/`.
+
+| Desenho | O que é |
+| --- | --- |
+| `pequi`, `buriti`, `canela`, `tree`, `bush`, `tuft`, `reeds` | pequizeiro com frutos e flores, buriti com cacho, canela-de-ema florida, árvore torta do cerrado, moita, capim, taboa |
+| `mound` | o cupinzeiro |
+| `frog`, `spider`, `owl_body`, `owl_wing`, `wolf_body`, `wolf_leg` | sapo, aranha, suindara (corpo e asa que bate), lobo-guará (corpo e perna que anda) |
+| `pond`, `ground`, `sky`, `hills`, `branch` | lagoa com vitórias-régias, chão do campo (repete sem emenda), céu com a Via Láctea, serra ao longe, galho do primeiro plano |
+| `icon` | o ícone do app |
+
+No jogo cada desenho aparece duas vezes: escurecido, como forma na noite,
+e nas suas cores onde a luz dos vaga-lumes alcança. As luzes, as teias e
+as partículas são feitas em código, e os sons também (`src/sfx.zig`).
+
+Para refazer os desenhos, que já estão em `data/`:
+
+```sh
+python3 tools/art.py --preview   # precisa de rsvg-convert, Pillow e numpy
+```
+
+Tudo é original. A única peça de terceiros é a fonte Bitter (SIL Open Font
 License 1.1, `data/OFL-Bitter.txt`).

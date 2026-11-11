@@ -85,12 +85,21 @@ pub fn build(b: *std.Build) void {
         .{ "webs", 4900 }, .{ "wind", 5700 }, .{ "emas", 9600 },
     };
     for (scripts) |sc| {
-        pequi.addScriptedRun(b, game, shots, b.path(b.fmt("tools/shots/{s}.txt", .{sc[0]})), sc[1], "720x1280", b.fmt("shots/{s}", .{sc[0]}));
+        const script = b.path(b.fmt("tools/shots/{s}.txt", .{sc[0]}));
+        const out = b.fmt("shots/{s}", .{sc[0]});
+        pequi.addScriptedRun(b, game, shots, script, sc[1], "720x1280", out);
+        // And each one alone: `zig build shot-tour`.
+        const one = b.step(b.fmt("shot-{s}", .{sc[0]}), b.fmt("Play only tools/shots/{s}.txt", .{sc[0]}));
+        pequi.addScriptedRun(b, game, one, script, sc[1], "720x1280", out);
     }
 
     // The same tour on a tall phone (9:20) and on the widest shape (4:5).
     pequi.addScriptedRun(b, game, shots, b.path("tools/shots/tall.txt"), 200, "720x1600", "shots/tall");
     pequi.addScriptedRun(b, game, shots, b.path("tools/shots/wide.txt"), 200, "800x1000", "shots/wide");
+
+    // A tablet's pixels, to look at sharpness. Slow without a GPU, so on its own.
+    const tablet = b.step("tablet", "Render a few frames at a tablet's resolution (1600x2560)");
+    pequi.addScriptedRun(b, game, tablet, b.path("tools/shots/tablet.txt"), 200, "1600x2560", "shots/tablet");
 
     // 200 fireflies at once: the game logs what its frame costs.
     const stress = b.step("stress", "Fly 200 fireflies around headless and print the cost of the frame");

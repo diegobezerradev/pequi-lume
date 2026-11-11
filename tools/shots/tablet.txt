@@ -1,0 +1,8 @@
+# A tablet, 1600 x 2560 pixels at 2 pixels per dp: is everything sharp?
+shot 30 title.ppm
+tap 40 270 636
+shot 70 map.ppm
+tap 80 93 232
+drag 110 270 500 270 250 60
+tap 180 270 440
+shot 195 level.ppm

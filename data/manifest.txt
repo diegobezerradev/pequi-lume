@@ -1,4 +1,27 @@
-# Lume's asset pack. Pictures and sounds are made in code (src/art.zig,
-# src/sfx.zig); the only file here is the font Bitter (SIL OFL 1.1,
-# data/OFL-Bitter.txt).
-font     ui            Bitter-800.ttf           44
+# Lume's asset pack. The pictures are drawn by tools/art.py (art/svg/*.svg
+# are their sources); the sounds are made in code (src/sfx.zig). The font
+# is Bitter (SIL OFL 1.1, data/OFL-Bitter.txt), baked in three sizes so
+# text stays sharp from a small phone to a tablet.
+font     ui_s          Bitter-800.ttf           30
+font     ui_m          Bitter-800.ttf           60
+font     ui_l          Bitter-800.ttf           128
+
+bitmap   sky           sky.png                  linear
+bitmap   hills         hills.png                mipmap repeat
+bitmap   ground        ground.png               mipmap repeat
+bitmap   pond          pond.png                 mipmap
+bitmap   reeds         reeds.png                mipmap
+bitmap   pequi         pequi.png                mipmap
+bitmap   buriti        buriti.png               mipmap
+bitmap   canela        canela.png               mipmap
+bitmap   tree          tree.png                 mipmap
+bitmap   bush          bush.png                 mipmap
+bitmap   tuft          tuft.png                 mipmap
+bitmap   mound         mound.png                mipmap
+bitmap   frog          frog.png                 mipmap
+bitmap   spider        spider.png               mipmap
+bitmap   owl_body      owl_body.png             mipmap
+bitmap   owl_wing      owl_wing.png             mipmap
+bitmap   wolf_body     wolf_body.png            mipmap
+bitmap   wolf_leg      wolf_leg.png             mipmap
+bitmap   branch        branch.png               mipmap

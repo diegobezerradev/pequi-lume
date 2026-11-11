@@ -19,23 +19,29 @@ pub const light_color = draw.rgb(0.82, 1, 0.45);
 pub const Ui = struct {
     render: *pequi.RenderCommands,
     art: *const Art,
-    /// Null until the pack's font is loaded: then the built-in one is used.
-    font: ?*const draw.Font,
     pointer: Pointer,
     /// See `touchSize`.
     touch: f32,
+    /// Real pixels per virtual unit: picks the font size that stays sharp.
+    scale: f32,
 
-    pub fn init(input: *const pequi.Input, render: *pequi.RenderCommands, art: *const Art, font: ?*const draw.Font, pointer: Pointer) Ui {
-        return .{ .render = render, .art = art, .font = font, .pointer = pointer, .touch = touchSize(input, render) };
+    pub fn init(input: *const pequi.Input, render: *pequi.RenderCommands, art: *const Art, pointer: Pointer) Ui {
+        const scale: f32 = if (input.window_width == 0 or render.width == 0) 1 else @as(f32, @floatFromInt(input.window_width)) / @as(f32, @floatFromInt(render.width));
+        return .{ .render = render, .art = art, .pointer = pointer, .touch = touchSize(input, render), .scale = scale };
+    }
+
+    /// The font for the engine's menus (their text is about 24 units).
+    pub fn menuFont(ui: *const Ui) ?*const draw.Font {
+        return ui.art.font(26 * ui.scale);
     }
 
     pub fn width(ui: *const Ui, size: f32, bytes: []const u8) f32 {
-        if (ui.font) |font| return draw.textFontWidth(font, size / font.size, bytes);
+        if (ui.art.font(size * ui.scale)) |font| return draw.textFontWidth(font, size / font.size, bytes);
         return draw.textWidth(size * 0.7, bytes);
     }
 
     pub fn text(ui: *const Ui, x: f32, y: f32, size: f32, bytes: []const u8, rgba: u32) void {
-        if (ui.font) |font| {
+        if (ui.art.font(size * ui.scale)) |font| {
             draw.textFont(ui.render, font, x, y, size / font.size, bytes, rgba);
         } else {
             draw.text(ui.render, x, y, size * 0.7, bytes, rgba);
