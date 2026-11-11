@@ -44,7 +44,9 @@ def pad(freq, seconds, bright=900):
     x = np.zeros(n)
     for detune, level in ((-0.004, 0.5), (0, 1), (0.005, 0.5)):
         f = freq * (1 + detune)
-        x += level * (np.sin(2 * np.pi * f * t) + 0.35 * np.sin(2 * np.pi * 2 * f * t + 0.5) + 0.15 * np.sin(2 * np.pi * 3 * f * t))
+        # The octave and the twelfth are strong on purpose: a phone's
+        # speaker plays little below 300 Hz, and they carry the chord there.
+        x += level * (np.sin(2 * np.pi * f * t) + 0.5 * np.sin(2 * np.pi * 2 * f * t + 0.5) + 0.25 * np.sin(2 * np.pi * 3 * f * t) + 0.12 * np.sin(2 * np.pi * 4 * f * t + 1))
     attack, release = min(1.6, seconds * 0.35), min(2.2, seconds * 0.45)
     e = np.ones(n)
     a, r = int(attack * SR), int(release * SR)
@@ -56,18 +58,24 @@ def pad(freq, seconds, bright=900):
 
 
 def viola(freq, seconds, rng, bright=0.5):
-    """A plucked steel string, like a viola caipira (Karplus-Strong)."""
+    """A plucked steel string, like a viola caipira: a stack of harmonics,
+    the high ones dying first. Pure tones only: a noise burst (the usual
+    way to fake a pluck) turns into a steady hiss once echoes pile up, and
+    a phone's small speaker plays the hiss louder than the note."""
     n = int(seconds * SR)
-    period = int(SR / freq)
-    line = lowpass(rng.uniform(-1, 1, period), 3000 + 5000 * bright)
-    out = np.zeros(n)
-    damp = 0.996 - 30 / (freq * 400)
-    for i in range(n):
-        j = i % period
-        out[i] = line[j]
-        line[j] = damp * 0.5 * (line[j] + line[(j + 1) % period])
-    out *= np.exp(-np.arange(n) / SR / (seconds * 0.6))
-    return highpass(out, 90) * 0.5
+    t = np.arange(n) / SR
+    x = np.zeros(n)
+    # Where along the string it is plucked shapes which harmonics sound.
+    pluck = 0.18 + 0.1 * rng.random()
+    for k in range(1, 13):
+        f = freq * k * (1 + 0.0004 * k * k)  # a stiff string runs a little sharp
+        if f > 7000:
+            break
+        level = np.sin(np.pi * k * pluck) / k ** (1.9 - 0.7 * bright)
+        x += level * np.sin(2 * np.pi * f * t + k) * np.exp(-t * (1.3 + 0.9 * k) / (seconds * 0.5))
+    attack = int(0.003 * SR)
+    x[:attack] *= np.linspace(0, 1, attack)
+    return x * 0.22
 
 
 def kalimba(freq, seconds):
@@ -82,18 +90,18 @@ def kalimba(freq, seconds):
 
 
 def flute(freq, seconds, rng):
-    """A breathy wooden flute: soft start, vibrato that comes in late."""
+    """A wooden flute: soft start, vibrato that comes in late. No breath
+    noise, for the same reason the viola has none."""
     n = int(seconds * SR)
     t = np.arange(n) / SR
     vib = 1 + 0.006 * np.sin(2 * np.pi * 4.8 * t) * np.clip((t - 0.5) / 0.8, 0, 1)
     phase = 2 * np.pi * np.cumsum(freq * vib) / SR
     x = np.sin(phase) + 0.22 * np.sin(2 * phase) + 0.07 * np.sin(3 * phase)
-    breath = lowpass(highpass(rng.normal(0, 1, n), freq * 1.5), freq * 5) * 0.07
     e = np.ones(n)
     a, r = int(min(0.22, seconds * 0.3) * SR), int(min(0.6, seconds * 0.4) * SR)
     e[:a] = np.linspace(0, 1, a) ** 1.5
     e[-r:] = np.linspace(1, 0, r) ** 1.5
-    return (x + breath) * e * 0.3
+    return x * e * 0.3
 
 
 def bass(freq, seconds):
@@ -131,6 +139,9 @@ class Loop:
             side += total * wet / feedback
 
     def write(self, name):
+        # Nothing in the music lives above 7 kHz; whatever is there is noise.
+        self.left = lowpass(self.left, 7000)
+        self.right = lowpass(self.right, 7000)
         peak = max(np.abs(self.left).max(), np.abs(self.right).max())
         scale = 0.7 / peak
         stereo = np.stack([self.left, self.right], 1) * scale
