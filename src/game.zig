@@ -360,7 +360,7 @@ pub const Game = struct {
         if (menu.button("Continuar")) g.paused = false;
         if (menu.button("Recomeçar")) g.start(g.sim.level_index);
         if (menu.button("Mapa")) action = .map;
-        var changed = menu.slider("Ambiente", &f.volumes.music, 0, 1);
+        var changed = menu.slider("Música", &f.volumes.music, 0, 1);
         changed = menu.slider("Efeitos", &f.volumes.effects, 0, 1) or changed;
         if (@import("builtin").os.tag == .windows) _ = menu.toggle("Tela cheia", f.fullscreen);
         menu.end();

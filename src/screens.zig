@@ -168,7 +168,7 @@ pub fn settings(ui: *const Ui, menu: *pequi.ui.Ui, input: *pequi.Input, time: f3
     backdrop(ui, time, draw.white);
     var action: Action = .none;
     var m = pequi.ui.begin(menu, input, ui.render, ui.menuFont(), .{ .title = "Ajustes", .theme = game.theme, .item_height = ui.touch, .width = 440 });
-    var changed = m.slider("Ambiente", &volumes.music, 0, 1);
+    var changed = m.slider("Música", &volumes.music, 0, 1);
     changed = m.slider("Efeitos", &volumes.effects, 0, 1) or changed;
     if (@import("builtin").os.tag == .windows) _ = m.toggle("Tela cheia", fullscreen);
     if (m.button("Voltar") or ui.pointer.back) action = .title;

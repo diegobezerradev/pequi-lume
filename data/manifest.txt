@@ -25,3 +25,8 @@ bitmap   owl_wing      owl_wing.png             mipmap
 bitmap   wolf_body     wolf_body.png            mipmap
 bitmap   wolf_leg      wolf_leg.png             mipmap
 bitmap   branch        branch.png               mipmap
+
+# Music: one loop per region, synthesized by tools/music.py.
+sound    music_vereda      music_vereda.ogg      stream
+sound    music_campo_sujo  music_campo_sujo.ogg  stream
+sound    music_chapada     music_chapada.ogg     stream

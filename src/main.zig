@@ -22,6 +22,22 @@ pub const panic = pequi.panic;
 
 const Screen = enum { title, map, settings, play };
 
+const song_names = [_][]const u8{ "music_vereda", "music_campo_sujo", "music_chapada" };
+const no_song = song_names.len;
+const song_volume: f32 = 0.42;
+
+/// Plays the region's song, fading the other one out.
+fn playSong(app: *App, api: *const pequi.platform.PlatformApi, want: u32) void {
+    if (want != app.song) {
+        if (app.song < no_song and app.has_song[app.song]) app.songs[app.song].stop(&app.mixer, 1.5);
+        if (want < no_song and app.has_song[want]) app.songs[want].play(api, &app.mixer, .{ .bus = .music, .volume = song_volume, .fade_in = 2 }, true);
+        app.song = want;
+    }
+    for (&app.songs, app.has_song) |*stream, has| {
+        if (has) stream.update(api, &app.mixer);
+    }
+}
+
 const App = struct {
     /// Owns this struct and everything the game allocates.
     arena: pequi.Arena,
@@ -35,6 +51,11 @@ const App = struct {
     pack: pequi.assets.Pack,
     has_pack: bool,
     progress: Progress,
+    /// One song per region, streamed from the pack; the menus play the first.
+    songs: [3]pequi.audio.Stream,
+    has_song: [3]bool,
+    /// The song playing now (3: none).
+    song: u32,
 
     screen: Screen,
     /// A screen fades in from the dark: 1 just after a change, then to 0.
@@ -63,6 +84,16 @@ fn init(memory: *pequi.GameMemory) *App {
         app.has_pack = true;
     } else |err| {
         pequi.log("lume: asset pack: {s} (using the built-in font)", .{@errorName(err)});
+    }
+    app.has_song = @splat(false);
+    app.song = no_song;
+    if (app.has_pack) {
+        for (song_names, 0..) |name, i| {
+            if (app.pack.openStream(&app.arena, name)) |stream| {
+                app.songs[i] = stream;
+                app.has_song[i] = true;
+            } else |err| pequi.log("lume: {s}: {s}", .{ name, @errorName(err) });
+        }
     }
     app.progress = Progress.load(api);
     app.screen = .title;
@@ -105,6 +136,7 @@ pub fn updateAndRender(memory: *pequi.GameMemory, input: *pequi.Input, render: *
         }
     }
     app.art.fitColorTarget(input, render);
+    playSong(app, api, if (app.screen == .play) @backingInt(levels.get(app.game.sim.level_index).region) else 0);
 
     if (app.screen == .play) {
         const index = app.game.sim.level_index;

@@ -2,7 +2,7 @@
 """Draws Lume's illustrations as SVG and renders them to data/*.png.
 
     python3 tools/art.py              # every picture
-    python3 tools/art.py pequi frog   # only these
+    python3 tools/art.py pequi frog   # only these ("icon" for the app's icons)
     python3 tools/art.py --preview    # also art/preview.png, on a night background
 
 Needs rsvg-convert and Pillow. Sizes are in pixels, three per world unit
@@ -727,31 +727,79 @@ def branch():
     return s
 
 
-def icon():
-    """The app's icon: the lit mound in the night, fireflies around it."""
+def icon_layers():
+    """The app's icon in two layers, as Android's adaptive icons want: a
+    background that fills the square, and a foreground (the lit mound and
+    its fireflies) kept inside the middle, which is all a round or squircle
+    mask is sure to show."""
     n = 432
-    s = Svg(n, n)
-    s.add(f'<rect width="{n}" height="{n}" fill="{s.linear([(0, "#030816", 1), (1, "#12305a", 1)])}"/>')
-    s.circle(216, 250, 190, s.radial([(0, "#c8f070", 0.55), (0.5, "#6fb84a", 0.2), (1, "#6fb84a", 0)], units="objectBoundingBox"))
+    bg = Svg(n, n)
+    bg.add(f'<rect width="{n}" height="{n}" fill="{bg.linear([(0, "#030816", 1), (1, "#12305a", 1)])}"/>')
+    r = rnd(161)
+    for i in range(70):
+        bg.circle(r.uniform(0, n), r.uniform(0, n * 0.8), r.choice([0.9, 1.2, 1.8]), "#e8f0ff", r.uniform(0.3, 0.8))
+    bg.circle(216, 236, 200, bg.radial([(0, "#c8f070", 0.55), (0.5, "#6fb84a", 0.2), (1, "#6fb84a", 0)]))
+    bg.path(f"M0,340 Q216,318 {n},340 L{n},{n} L0,{n} Z", "#050b18")
+
+    fg = Svg(n, n)
+    # Everything a little smaller, around the middle: inside the safe zone.
+    fg.group('transform="translate(216,222) scale(0.74) translate(-216,-240)"')
     d = smooth([(130, 372), (140, 300), (156, 236), (176, 172), (216, 110), (252, 170), (270, 236), (292, 300), (302, 372)], tension=0.55)
-    s.path(d, "#6b4326")
-    s.clip(d)
-    s.path(smooth([(216, 100), (250, 200), (240, 300), (270, 372), (320, 372), (320, 100)]), "#44291a")
-    s.end()
+    fg.path(d, "#7a4c2a")
+    fg.clip(d)
+    fg.path(smooth([(216, 100), (250, 200), (240, 300), (270, 372), (320, 372), (320, 100)]), "#4a2c1b")
+    fg.path(smooth([(150, 372), (160, 290), (180, 200), (212, 124), (204, 220), (190, 300), (186, 372)]), "#a8703e", 0.9)
+    fg.end()
     r = rnd(160)
     for i in range(26):
         t = r.uniform(0, 1)
         x, y = 216 + r.uniform(-1, 1) * (78 - t * 54), 360 - t * 220
-        s.circle(x, y, 13, "#d8ff7a", 0.28)
-        s.circle(x, y, 4.2, "#f4ffc0")
-    for x, y, rr in ((96, 150, 15), (330, 120, 12), (350, 250, 10), (80, 280, 9), (250, 64, 9)):
-        s.circle(x, y, rr * 2.6, "#d8ff7a", 0.22)
-        s.circle(x, y, rr * 1.3, "#d8ff7a", 0.4)
-        s.circle(x, y, rr * 0.55, "#fbffd8")
-    s.path(f"M0,372 Q216,350 {n},372 L{n},{n} L0,{n} Z", "#050b18")
-    return s
+        fg.circle(x, y, 13, "#d8ff7a", 0.28)
+        fg.circle(x, y, 4.2, "#f4ffc0")
+    for x, y, rr in ((96, 170, 15), (330, 140, 12), (346, 262, 10), (86, 290, 9), (250, 74, 9)):
+        fg.circle(x, y, rr * 2.6, "#d8ff7a", 0.22)
+        fg.circle(x, y, rr * 1.3, "#d8ff7a", 0.4)
+        fg.circle(x, y, rr * 0.55, "#fbffd8")
+    fg.end()
+    return bg, fg
 
 
+def write_icons():
+    """art/icon.png (both layers together), the launcher icons for old
+    Android in every density, and the two layers for adaptive icons."""
+    from PIL import Image
+    bg, fg = icon_layers()
+    layers = []
+    for name, svg in (("icon_background", bg), ("icon_foreground", fg)):
+        path = os.path.join(ROOT, "art", "svg", name + ".svg")
+        with open(path, "w") as f:
+            f.write(svg.text())
+        out = os.path.join(ROOT, "art", name + ".png")
+        subprocess.run(["rsvg-convert", path, "-o", out], check=True)
+        layers.append(Image.open(out).convert("RGBA"))
+        os.remove(out)
+    res = os.path.join(ROOT, "android", "app", "src", "main", "res")
+    # Old launchers show the middle two thirds of the layers, as a square.
+    whole = Image.alpha_composite(layers[0], layers[1])
+    legacy = whole.crop((54, 54, 378, 378))
+    legacy.resize((512, 512), Image.LANCZOS).save(os.path.join(ROOT, "art", "icon.png"))
+    for density, size in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
+        folder = os.path.join(res, "mipmap-" + density)
+        os.makedirs(folder, exist_ok=True)
+        legacy.resize((size, size), Image.LANCZOS).save(os.path.join(folder, "ic_launcher.png"))
+    # The layers are 108dp: 432 pixels at the highest density.
+    folder = os.path.join(res, "mipmap-xxxhdpi")
+    layers[0].convert("RGB").save(os.path.join(folder, "ic_launcher_background.png"))
+    layers[1].save(os.path.join(folder, "ic_launcher_foreground.png"))
+    folder = os.path.join(res, "mipmap-anydpi-v26")
+    os.makedirs(folder, exist_ok=True)
+    with open(os.path.join(folder, "ic_launcher.xml"), "w") as f:
+        f.write('<?xml version="1.0" encoding="utf-8"?>\n'
+                '<!-- Android 8 and later: the launcher cuts its own shape out of these two layers. -->\n'
+                '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                '    <background android:drawable="@mipmap/ic_launcher_background" />\n'
+                '    <foreground android:drawable="@mipmap/ic_launcher_foreground" />\n'
+                '</adaptive-icon>\n')
 
 
 def render(name, svg, width=None):
@@ -759,21 +807,12 @@ def render(name, svg, width=None):
     path = os.path.join(ROOT, "art", "svg", name + ".svg")
     with open(path, "w") as f:
         f.write(svg.text())
-    # The icon is not in the game's pack: it goes to art/, and the Android
-    # launcher sizes are made from it.
-    out = os.path.join(ROOT, "art" if name == "icon" else "data", name + ".png")
+    out = os.path.join(ROOT, "data", name + ".png")
     cmd = ["rsvg-convert", path, "-o", out]
     if width:
         cmd += ["-w", str(width)]
     subprocess.run(cmd, check=True)
     bleed(out)
-    if name == "icon":
-        from PIL import Image
-        im = Image.open(out).convert("RGBA")
-        for density, size in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
-            folder = os.path.join(ROOT, "android", "app", "src", "main", "res", "mipmap-" + density)
-            os.makedirs(folder, exist_ok=True)
-            im.resize((size, size), Image.LANCZOS).save(os.path.join(folder, "ic_launcher.png"))
     return out
 
 
@@ -810,13 +849,13 @@ PICTURES = {
     "pequi": pequi, "buriti": buriti, "canela": canela, "tree": tree, "bush": bush, "tuft": tuft, "reeds": reeds,
     "mound": mound, "frog": frog, "spider": spider, "owl_body": owl_body, "owl_wing": owl_wing,
     "wolf_body": wolf_body, "wolf_leg": wolf_leg, "pond": pond, "ground": ground, "sky": sky, "hills": hills,
-    "branch": branch, "icon": icon,
+    "branch": branch,
 }
 
 
 def preview(names):
     from PIL import Image
-    ims = [Image.open(os.path.join(ROOT, "art" if n == "icon" else "data", n + ".png")).convert("RGBA") for n in names]
+    ims = [Image.open(os.path.join(ROOT, "data", n + ".png")).convert("RGBA") for n in names]
     h = max(i.height for i in ims) + 40
     sheet = Image.new("RGBA", (sum(i.width + 30 for i in ims) + 30, h), (16, 26, 48, 255))
     x = 30
@@ -827,7 +866,11 @@ def preview(names):
 
 
 if __name__ == "__main__":
-    names = [a for a in sys.argv[1:] if not a.startswith("--")] or list(PICTURES)
+    names = [a for a in sys.argv[1:] if not a.startswith("--")] or list(PICTURES) + ["icon"]
+    if "icon" in names:
+        names.remove("icon")
+        write_icons()
+        print("drew icon")
     for n in names:
         render(n, PICTURES[n]())
         print("drew", n)

@@ -90,6 +90,7 @@ src/
   main.zig         memória, áudio, telas, laço do frame
 tools/
   art.py, draw.py  desenham as ilustrações em SVG e as renderizam
+  music.py         sintetiza as três faixas
   levels.py        desenha as 12 fases a partir de faixas (lagoa, portão, teias, ronda...)
   robots.zig       os robôs em todas as fases
   shots/           roteiros para `zig build shots`
@@ -123,16 +124,23 @@ em tablet. Os SVG ficam em `art/svg/`.
 | `mound` | o cupinzeiro |
 | `frog`, `spider`, `owl_body`, `owl_wing`, `wolf_body`, `wolf_leg` | sapo, aranha, suindara (corpo e asa que bate), lobo-guará (corpo e perna que anda) |
 | `pond`, `ground`, `sky`, `hills`, `branch` | lagoa com vitórias-régias, chão do campo (repete sem emenda), céu com a Via Láctea, serra ao longe, galho do primeiro plano |
-| `icon` | o ícone do app |
+| ícone | o ícone do app, em duas camadas (ícone adaptativo do Android) |
 
 No jogo cada desenho aparece duas vezes: escurecido, como forma na noite,
 e nas suas cores onde a luz dos vaga-lumes alcança. As luzes, as teias e
-as partículas são feitas em código, e os sons também (`src/sfx.zig`).
+as partículas são feitas em código, e os efeitos sonoros também
+(`src/sfx.zig`).
+
+A música é uma faixa calma por região, sintetizada por `tools/music.py`
+(viola caipira dedilhada, kalimba, flauta e acordes longos). Tudo em lá
+maior, a mesma escala das notas de resgate e do acorde do cupinzeiro, para
+que o que o jogo toca sempre combine com a faixa.
 
 Para refazer os desenhos, que já estão em `data/`:
 
 ```sh
 python3 tools/art.py --preview   # precisa de rsvg-convert, Pillow e numpy
+python3 tools/music.py           # as três faixas; precisa de numpy, scipy e ffmpeg
 ```
 
 Tudo é original. A única peça de terceiros é a fonte Bitter (SIL Open Font
